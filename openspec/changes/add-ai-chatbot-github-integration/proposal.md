@@ -9,6 +9,7 @@ SpecFleet has no interactive interface for turning feature requests into reviewe
 - Add a dashboard chat experience with conversation history, streaming answers, and readable code previews, using React and TypeScript.
 - Implement the backend in .NET 10/C# with separate Service, Api, and Workers projects plus one xUnit Test project, and implement the dashboard as a fifth, independently built React/TypeScript UI project. Keep application and domain behavior in the Service library; Api and Workers provide only transport/consumer wiring.
 - Organize Service logic as self-contained vertical slices by feature/use case, using DDD boundaries and a flat, searchable folder/file layout. Implement HTTP endpoints with Minimal APIs in self-contained API folders and use PostgreSQL for persistence.
+- Build acceptance scenarios from the capabilities' spec scenarios before feature implementation, then develop test-first with Gherkin executed in the single xUnit project, architecture tests, Testcontainers-backed integration tests, and Playwright UI acceptance tests.
 - Add a server-side Gemini integration for chat and generation of code, documentation, worker and infrastructure artifacts, and OpenSpec slices.
 - Add controlled GitHub actions for issue creation, branch/file changes, pull request creation, and approved workflow dispatches.
 - Add OpenSpec browsing, proposal generation, validation, and task dispatch through a constrained server-side orchestrator.

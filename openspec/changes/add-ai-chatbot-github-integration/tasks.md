@@ -1,38 +1,47 @@
 # Tasks
 
-## 1. Establish the five-project architecture and runtime foundation
+## 1. Establish project and test foundations before feature implementation
 
-- [ ] 1.1 Verify that the UI Wizard, Postgres Queue, Orchestrator, Bootstrap Worker, and Free AI Pipeline prerequisites are implemented and available; exercise their health checks and record API/task contracts, blocking chatbot integration if a prerequisite is missing.
-- [ ] 1.2 Scaffold the .NET 10/C# `SpecFleet.Service`, `SpecFleet.Api`, `SpecFleet.Workers`, and single xUnit `SpecFleet.Test` projects plus a separate `SpecFleet.Ui` React/TypeScript project; verify the repository contains exactly five projects and all backend projects build.
-- [ ] 1.3 Establish self-contained feature/use-case slices and DDD boundaries in Service, Minimal API wiring folders in Api, thin consumer wiring in Workers, and the single xUnit project in Test; verify Api/Workers reference Service for application behavior, Test references projects under test, and document the folder/naming conventions.
-- [ ] 1.4 Create the standalone UI project's source and build configuration using the latest stable compatible React/TypeScript versions and a lockfile; verify it builds independently, is not nested in Api, and its assets are not bundled or served by the API.
-- [ ] 1.5 Configure independent UI hosting/deployment and authenticated communication with the API, including explicit trusted origins and CORS; verify a staging deployment can load the UI from its own location and successfully use authenticated HTTP/streaming API endpoints.
-- [ ] 1.6 Configure PostgreSQL persistence and schema/migrations within Service following the prerequisite queue contract; verify migrations and persistence through xUnit integration tests in the single Test project and document database configuration.
-- [ ] 1.7 Confirm the deployment secret manager, encryption/key-rotation mechanism, conversation retention policy, supported Gemini model IDs, and free-tier quotas; verify startup and secret handling through xUnit tests and document the selected settings.
+- [ ] 1.1 Verify that the UI Wizard, Postgres Queue, Orchestrator, Bootstrap Worker, and Free AI Pipeline prerequisites are available; exercise their health checks and record contracts, blocking dependent implementation if any are missing.
+- [ ] 1.2 Scaffold the .NET 10/C# Service, Api, Workers, and Test projects plus the separately built React/TypeScript Ui project; verify the repository contains exactly five projects and backend builds succeed.
+- [ ] 1.3 Configure the single Test project with xUnit, Gherkin scenario execution, Testcontainers, and Playwright .NET; verify one test project can discover and execute a sample Gherkin scenario and browser test without adding another test project.
+- [ ] 1.4 Before implementing any feature behavior, translate every scenario in all three capability specs into stable, implementation-independent Gherkin acceptance scenarios in Test and add a traceability map from each spec scenario to its test; verify the scenarios are discovered by xUnit and fail or remain explicitly pending for the not-yet-implemented behavior.
+- [ ] 1.5 Add executable architecture tests for exactly five projects, allowed project references, Service ownership of application behavior, thin Api/Workers, independent UI placement, and vertical-slice boundaries; verify the rules pass for the intended skeleton and demonstrably fail when a deliberate temporary violation is introduced, then remove that violation.
+- [ ] 1.6 Configure Testcontainers for real PostgreSQL and the selected real queue/broker; verify migrations, queue connectivity, isolation, and cleanup from the xUnit project without mocks or fakes.
+- [ ] 1.7 Add an AI-generated-code harness in Test that runs real provider-generated artifacts through structural checks, formatting/static analysis, compilation, and applicable tests; verify it rejects an artifact violating a required constraint and accepts a conforming generated artifact without asserting that passing checks proves defect-free code.
 
-## 2. Implement chat and artifact generation in Service
+## 2. Establish Service result and domain-event conventions
 
-- [ ] 2.1 Implement authenticated conversation storage and server-side provider credential access/encryption in Service; verify authorization, persistence, missing-key errors, key handling, and absence of secrets from client responses/logs with xUnit tests in Test.
-- [ ] 2.2 Implement the Gemini provider adapter and streaming chat use case in Service using deployment-configured supported model IDs; verify streaming completion, cancellation, provider failures, and quota failures with provider contract tests in Test and document model configuration.
-- [ ] 2.3 Implement typed artifact generation and validation for code, documentation, workers, Terraform, Cloudflare Tunnel, RabbitMQ, and OpenSpec proposal content in Service; verify valid previews and invalid/unsupported output rejection with xUnit tests in Test and document supported artifact types.
-- [ ] 2.4 Add self-contained Minimal API endpoint wiring for chat, generation, preview, approval, and status operations; verify HTTP behavior, authorization, streaming, and Service delegation with API tests in Test, with no business logic or persistence access in Api.
-- [ ] 2.5 Implement the React/TypeScript chat UI, previews, syntax highlighting, cancellation/errors, and separate apply/OpenSpec controls in the Ui project; verify chat and approval flows through browser-driven xUnit tests in Test and document how to use and deploy the independently hosted dashboard.
+- [ ] 2.1 Define typed Service response/result contracts for success and expected validation, authorization, conflict, provider, and queue outcomes; write failing xUnit tests first and verify expected failures propagate through Api/Workers as explicit outcomes without exception-based control flow.
+- [ ] 2.2 Define when meaningful domain state transitions publish domain events and how durable reactions use the agreed queue/outbox contract; write failing tests first and verify persisted state and event delivery/retry behavior against Testcontainers-backed infrastructure.
+- [ ] 2.3 Add host-boundary handling for unexpected exceptions with explicit logs and error responses/statuses; verify unexpected failures are not swallowed or converted into success-shaped results using end-to-end tests with real configured components.
 
-## 3. Implement approved GitHub actions in Service
+## 3. Implement chat and artifact generation test-first
 
-- [ ] 3.1 Add least-privilege GitHub App integration and repository/action authorization in Service; verify denied repositories and insufficient permissions cause no mutation with xUnit tests in Test and document installation permissions.
-- [ ] 3.2 Implement confirmed issue creation and review-branch file additions/updates in Service, including path validation and immutable-preview approval; verify issue contents, branch changes, conflicts, and rejected paths using mocked GitHub API tests in Test.
-- [ ] 3.3 Implement separately confirmed pull requests and allowlisted workflow dispatch in Service; verify base-branch selection, workflow/input allowlists, GitHub failures, and returned status/URLs with xUnit tests in Test and document workflow configuration.
-- [ ] 3.4 Add the corresponding Minimal API route wiring for GitHub actions; verify authentication, request/result mapping, and failure reporting through API tests in Test without adding GitHub logic to Api.
+- [ ] 3.1 For each chat and artifact-generation Gherkin scenario, verify the acceptance test fails before implementation, then implement authenticated conversation persistence and typed Service use cases; rerun the scenario tests against Testcontainers PostgreSQL and document response/result contracts.
+- [ ] 3.2 Implement the Gemini adapter and streaming use case after adding failing tests for completion, cancellation, missing credentials, and provider errors; verify with real configured Gemini credentials and provider contract tests, reporting credential-blocked tests as not run rather than passing.
+- [ ] 3.3 Implement typed artifact generation and validation for code, documentation, workers, Terraform, Cloudflare Tunnel, RabbitMQ, and OpenSpec proposal content; verify acceptance scenarios and AI harness structural/build/test checks against real generated output.
+- [ ] 3.4 Add Minimal API route wiring that delegates to Service result contracts; verify HTTP/stream mappings and authorization through the running API with real Testcontainers dependencies and no mocked/faked Service or persistence components.
 
-## 4. Implement OpenSpec and worker orchestration in Service
+## 4. Implement GitHub actions test-first
 
-- [ ] 4.1 Implement OpenSpec inspection, proposal preparation, validation, and approved state-changing operations in Service using allowlisted CLI invocations without a shell; verify workspace containment, bounded execution, approval gates, and unsupported-command rejection with xUnit tests in Test.
-- [ ] 4.2 Implement typed task contracts, payload validation, durable status, and dispatch for the six supported worker categories in Service; verify accepted/rejected payloads and status transitions with queue contract tests in Test and document the task contract.
-- [ ] 4.3 Wire Workers consumers to the Service task use cases without business logic; verify consumer dispatch, acknowledgement/retry behavior, and failure reporting with worker integration tests in Test.
-- [ ] 4.4 Add self-contained Minimal API route wiring for OpenSpec and task creation/status; verify supported operations, confirmations, and Service delegation with API tests in Test without adding orchestration logic to Api.
+- [ ] 4.1 For each GitHub authorization, issue, file-change, pull-request, workflow, and failure scenario in the specs, verify its Gherkin acceptance test fails before implementing the Service use case; then verify it passes against an isolated real GitHub sandbox repository and least-privilege App credentials.
+- [ ] 4.2 Implement immutable-preview confirmation, safe path handling, review-branch file changes, issue creation, pull requests, and allowlisted workflow dispatch; verify actual sandbox side effects, denied access, conflicts, cleanup, and accurate response results without mocks/fakes.
+- [ ] 4.3 Add Minimal API wiring for GitHub actions and verify end-to-end request, approval, authorization, and result behavior against the running API and GitHub sandbox; block release verification if required sandbox credentials are unavailable.
 
-## 5. Verify rollout and operations
+## 5. Implement OpenSpec and worker orchestration test-first
 
-- [ ] 5.1 Run an end-to-end xUnit flow in Test from streamed prompt through validated preview, explicit approval, GitHub or worker action, and final status; verify cancellation and provider/queue/GitHub failures do not create unintended mutations.
-- [ ] 5.2 Document the five-project architecture, independent UI build/hosting/deployment, API origin/CORS configuration, PostgreSQL setup, secret provisioning/rotation, GitHub App, feature-flag rollout, monitoring, and rollback; verify documented commands and independent deployment procedures in staging before enabling state-changing actions in production.
+- [ ] 5.1 For every OpenSpec inspection, proposal, validation, approval, and rejection scenario, verify the Gherkin acceptance test fails before implementation; then implement allowlisted Service operations and verify workspace containment, command bounds, and expected response objects in integration tests.
+- [ ] 5.2 For each supported worker task category and task outcome scenario, verify a failing acceptance test before implementing typed payload validation, dispatch, and status; verify real queue delivery, persistence, retry, and status behavior with Testcontainers.
+- [ ] 5.3 Wire Workers as thin Service consumers and Api endpoints as Minimal API transport only; verify worker acknowledgement/failure behavior and API results through running components and real queue/database infrastructure.
+
+## 6. Implement and verify the independently deployed UI
+
+- [ ] 6.1 For every UI acceptance scenario, verify the corresponding Playwright test fails before implementing the React/TypeScript view; then build message history, streaming/cancellation, errors, code previews, approval, OpenSpec, and worker controls in the standalone Ui project.
+- [ ] 6.2 Run Playwright through xUnit against the independently hosted UI and running API with real configured PostgreSQL/queue dependencies; verify authenticated streaming, confirmed actions, cancellation, and errors, and verify Api neither bundles nor serves UI assets.
+
+## 7. Close acceptance coverage and production-readiness checks
+
+- [ ] 7.1 Run the complete Gherkin/xUnit acceptance suite and verify every scenario in each capability spec has a passing test or an explicit blocked status; do not waive or relabel missing/failed sandbox scenarios as passing.
+- [ ] 7.2 Run architecture tests, Testcontainers integration tests, Playwright tests, AI harness checks, formatting/static analysis, and all applicable build/tests in CI; verify release gates report failures and skipped/blocked checks explicitly without relying on coverage-percentage targets.
+- [ ] 7.3 Document the five-project architecture, stable acceptance contract change policy, red-green-refactor workflow, response/result and domain-event conventions, real-container/sandbox setup, Playwright execution, AI harness checks, deployment smoke tests, monitoring, and rollback; verify documented commands work in a clean staging environment.
