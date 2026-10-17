@@ -2,24 +2,35 @@ schema: spec-driven
 githubCopilot:
   cloudAgent: true
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  Use .NET 10 with C# for backend services, the latest stable React and TypeScript versions available when implementation begins for the UI, and PostgreSQL for relational persistence.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Keep exactly five projects: Service, Api, Workers, Ui, and Test. Service is the class library and owns all application/domain logic and integrations. Api and Workers are thin consumers responsible for wiring and transport/queue integration only; they must not contain business logic. Test is the only test project and uses xUnit for all automated tests.
+
+  Ui is a separate React/TypeScript project with its own build, hosting, and deployment location. Do not nest the UI in Api, bundle it into Api, or serve UI assets from Api.
+
+  Organize backend behavior as self-contained vertical slices by feature/use case, with DDD boundaries inside each slice. Prefer a flat, searchable folder structure and clear file names that correspond to their feature folders or types. Define HTTP endpoints with Minimal APIs in self-contained Api feature/use-case folders; route definitions delegate behavior to Service.
+
+  Follow clean-code principles associated with Uncle Bob: keep responsibilities focused, boundaries explicit, and dependencies directed toward Service-owned use cases. Do not add projects beyond the five specified without an explicit requirement.
+
+rules:
+  proposal:
+    - "Preserve the specified .NET 10/C#, React/TypeScript, PostgreSQL stack and the five-project boundary: Service, Api, Workers, Ui, and Test."
+    - State that Ui is independently built, hosted, and deployed, separate from Api.
+  design:
+    - Keep all application/domain logic and integrations in the Service class library; Api and Workers contain wiring/transport/consumer integration only.
+    - Use self-contained vertical slices with DDD boundaries inside each feature/use case; prefer flat, searchable folders and clear corresponding file names.
+    - Use Minimal API endpoint definitions in self-contained Api feature/use-case folders, delegating behavior to Service.
+    - Keep React/TypeScript in its own independently built and deployed Ui project; never nest it in, bundle it with, or serve it from Api.
+    - Keep exactly five projects (Service, Api, Workers, Ui, Test); use PostgreSQL and one xUnit Test project.
+  tasks:
+    - "Keep the solution to exactly five projects: Service, Api, Workers, Ui, and Test; verify this project boundary in setup tasks."
+    - Keep business logic in Service and make Api and Workers thin consumers; include verification that project references preserve this boundary.
+    - Keep Ui independently built, hosted, and deployed from Api; include verification that Api does not serve or bundle UI assets.
+    - Put all automated tests in the single xUnit Test project.
+    - Organize implementation and verification around self-contained vertical feature/use-case slices and PostgreSQL persistence.
+  specs:
+    - Specify observable behavior and acceptance scenarios; keep implementation structure and technology choices in design and tasks unless they create an externally observable requirement.
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
