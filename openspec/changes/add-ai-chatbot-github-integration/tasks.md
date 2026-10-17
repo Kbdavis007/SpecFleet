@@ -1,39 +1,38 @@
 # Tasks
 
-## 1. Verify platform prerequisites and contracts
+## 1. Establish the five-project architecture and runtime foundation
 
-- [ ] 1.1 Verify that the UI Wizard, Postgres Queue, Orchestrator, Bootstrap Worker, and Free AI Pipeline prerequisites are implemented and available; exercise their documented health checks and record the API/task contracts, blocking chatbot integration if any are missing.
-- [ ] 1.2 Confirm the deployment secret manager, encryption/key-rotation mechanism, conversation retention policy, supported Gemini model IDs, and free-tier quotas; document the selected settings and verify the service starts with those settings without exposing secrets.
+- [ ] 1.1 Verify that the UI Wizard, Postgres Queue, Orchestrator, Bootstrap Worker, and Free AI Pipeline prerequisites are implemented and available; exercise their health checks and record API/task contracts, blocking chatbot integration if a prerequisite is missing.
+- [ ] 1.2 Scaffold the .NET 10/C# `SpecFleet.Service`, `SpecFleet.Api`, `SpecFleet.Workers`, and single xUnit `SpecFleet.Test` projects plus a separate `SpecFleet.Ui` React/TypeScript project; verify the repository contains exactly five projects and all backend projects build.
+- [ ] 1.3 Establish self-contained feature/use-case slices and DDD boundaries in Service, Minimal API wiring folders in Api, thin consumer wiring in Workers, and the single xUnit project in Test; verify Api/Workers reference Service for application behavior, Test references projects under test, and document the folder/naming conventions.
+- [ ] 1.4 Create the standalone UI project's source and build configuration using the latest stable compatible React/TypeScript versions and a lockfile; verify it builds independently, is not nested in Api, and its assets are not bundled or served by the API.
+- [ ] 1.5 Configure independent UI hosting/deployment and authenticated communication with the API, including explicit trusted origins and CORS; verify a staging deployment can load the UI from its own location and successfully use authenticated HTTP/streaming API endpoints.
+- [ ] 1.6 Configure PostgreSQL persistence and schema/migrations within Service following the prerequisite queue contract; verify migrations and persistence through xUnit integration tests in the single Test project and document database configuration.
+- [ ] 1.7 Confirm the deployment secret manager, encryption/key-rotation mechanism, conversation retention policy, supported Gemini model IDs, and free-tier quotas; verify startup and secret handling through xUnit tests and document the selected settings.
 
-## 2. Establish secured API and persistence foundations
+## 2. Implement chat and artifact generation in Service
 
-- [ ] 2.1 Add authenticated authorization checks and request limits for all chat/action routes; verify unauthorized users and over-limit requests are rejected by API tests and document the permission model.
-- [ ] 2.2 Add durable Postgres records for conversations, messages, artifact previews, approvals, GitHub actions, and worker task status using the prerequisite queue/orchestrator contract; verify migrations, access boundaries, and persistence with database tests and document retention behavior.
-- [ ] 2.3 Add server-side provider credential loading and encrypted-at-rest persistence where required; verify encryption/decryption, key rotation behavior, missing-credential errors, and absence of secrets from client responses and logs with security-focused tests and configuration documentation.
+- [ ] 2.1 Implement authenticated conversation storage and server-side provider credential access/encryption in Service; verify authorization, persistence, missing-key errors, key handling, and absence of secrets from client responses/logs with xUnit tests in Test.
+- [ ] 2.2 Implement the Gemini provider adapter and streaming chat use case in Service using deployment-configured supported model IDs; verify streaming completion, cancellation, provider failures, and quota failures with provider contract tests in Test and document model configuration.
+- [ ] 2.3 Implement typed artifact generation and validation for code, documentation, workers, Terraform, Cloudflare Tunnel, RabbitMQ, and OpenSpec proposal content in Service; verify valid previews and invalid/unsupported output rejection with xUnit tests in Test and document supported artifact types.
+- [ ] 2.4 Add self-contained Minimal API endpoint wiring for chat, generation, preview, approval, and status operations; verify HTTP behavior, authorization, streaming, and Service delegation with API tests in Test, with no business logic or persistence access in Api.
+- [ ] 2.5 Implement the React/TypeScript chat UI, previews, syntax highlighting, cancellation/errors, and separate apply/OpenSpec controls in the Ui project; verify chat and approval flows through browser-driven xUnit tests in Test and document how to use and deploy the independently hosted dashboard.
 
-## 3. Implement Gemini chat and artifact generation
+## 3. Implement approved GitHub actions in Service
 
-- [ ] 3.1 Implement the server-side Gemini adapter and `POST /api/v1/chat/ask` streaming response using deployment-configured supported model IDs; verify streaming completion, cancellation, provider errors, and quota failures with provider contract tests and document model configuration.
-- [ ] 3.2 Implement typed generation and worker-side validation for code, documentation, worker definitions, Terraform modules, Cloudflare Tunnel configuration, RabbitMQ configuration, and OpenSpec proposal content; verify valid previews and malformed/unsupported output rejection with unit tests and document supported artifact types.
+- [ ] 3.1 Add least-privilege GitHub App integration and repository/action authorization in Service; verify denied repositories and insufficient permissions cause no mutation with xUnit tests in Test and document installation permissions.
+- [ ] 3.2 Implement confirmed issue creation and review-branch file additions/updates in Service, including path validation and immutable-preview approval; verify issue contents, branch changes, conflicts, and rejected paths using mocked GitHub API tests in Test.
+- [ ] 3.3 Implement separately confirmed pull requests and allowlisted workflow dispatch in Service; verify base-branch selection, workflow/input allowlists, GitHub failures, and returned status/URLs with xUnit tests in Test and document workflow configuration.
+- [ ] 3.4 Add the corresponding Minimal API route wiring for GitHub actions; verify authentication, request/result mapping, and failure reporting through API tests in Test without adding GitHub logic to Api.
 
-## 4. Integrate the React dashboard chat
+## 4. Implement OpenSpec and worker orchestration in Service
 
-- [ ] 4.1 Add `SpecFleetChatBot.tsx` to the prerequisite dashboard with message history, incremental responses, cancellation, and actionable error states; verify rendering and stream lifecycle behavior with UI tests and document how to open the assistant.
-- [ ] 4.2 Add syntax-highlighted artifact previews and distinct “Apply to GitHub”, “Generate OpenSpec Slice”, and “Run OpenSpec CLI” controls; verify each control binds confirmation to the displayed immutable preview and target using UI tests.
+- [ ] 4.1 Implement OpenSpec inspection, proposal preparation, validation, and approved state-changing operations in Service using allowlisted CLI invocations without a shell; verify workspace containment, bounded execution, approval gates, and unsupported-command rejection with xUnit tests in Test.
+- [ ] 4.2 Implement typed task contracts, payload validation, durable status, and dispatch for the six supported worker categories in Service; verify accepted/rejected payloads and status transitions with queue contract tests in Test and document the task contract.
+- [ ] 4.3 Wire Workers consumers to the Service task use cases without business logic; verify consumer dispatch, acknowledgement/retry behavior, and failure reporting with worker integration tests in Test.
+- [ ] 4.4 Add self-contained Minimal API route wiring for OpenSpec and task creation/status; verify supported operations, confirmations, and Service delegation with API tests in Test without adding orchestration logic to Api.
 
-## 5. Implement authorized GitHub actions
+## 5. Verify rollout and operations
 
-- [ ] 5.1 Configure a least-privilege GitHub App integration and repository-level authorization for the issue, contents, pull request, and allowlisted workflow operations; verify denied repositories and insufficient permissions produce no mutations with API tests and document required installation permissions.
-- [ ] 5.2 Implement `POST /api/v1/chat/github/issue` and reviewed file additions/updates on isolated branches, including safe path validation and commits; verify confirmed issue creation, branch contents, and rejection of invalid paths using mocked GitHub API tests.
-- [ ] 5.3 Implement `POST /api/v1/chat/github/pr` and allowlisted workflow dispatches with separate confirmation and durable outcomes; verify pull-request targets, workflow/input allowlists, GitHub failures, and returned URLs with integration tests and document workflow configuration.
-
-## 6. Implement constrained OpenSpec and worker orchestration
-
-- [ ] 6.1 Implement `POST /api/v1/chat/spec/proposal` and OpenSpec inspection/validation through the configured CLI, generating changes in the repository's standard `openspec/changes` structure; verify generated proposals against the configured schema and verify workspace containment and unsupported-command rejection in CLI integration tests.
-- [ ] 6.2 Implement `POST /api/v1/chat/openspec/run` for allowlisted CLI operations, requiring confirmation for file-changing or apply operations; verify no shell execution, argument allowlisting, execution bounds, and approval enforcement with API/CLI tests and document supported commands.
-- [ ] 6.3 Implement `POST /api/v1/chat/tasks/create` for the six supported worker categories with API- and worker-side payload validation and durable status lookup; verify valid dispatch, invalid payload rejection, task progress, and failure reporting with queue/worker contract tests and document the task payload contract.
-
-## 7. Verify integrated rollout and operations
-
-- [ ] 7.1 Run an end-to-end flow from streamed prompt through validated preview, explicit approval, GitHub or worker action, and final status; verify cancellation, provider/queue/GitHub failures, and non-authorized attempts leave no unintended mutations.
-- [ ] 7.2 Document deployment configuration, secret provisioning/rotation, GitHub App setup, feature-flag rollout, monitoring, and rollback; verify the documented rollout and disable/rollback procedures in a staging environment before enabling state-changing actions in production.
+- [ ] 5.1 Run an end-to-end xUnit flow in Test from streamed prompt through validated preview, explicit approval, GitHub or worker action, and final status; verify cancellation and provider/queue/GitHub failures do not create unintended mutations.
+- [ ] 5.2 Document the five-project architecture, independent UI build/hosting/deployment, API origin/CORS configuration, PostgreSQL setup, secret provisioning/rotation, GitHub App, feature-flag rollout, monitoring, and rollback; verify documented commands and independent deployment procedures in staging before enabling state-changing actions in production.
