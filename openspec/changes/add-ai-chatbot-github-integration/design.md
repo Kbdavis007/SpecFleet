@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for motivation and specs/ for externally visible behavior. The repository currently has no application source, solution, database schema, queue, worker, or deployment configuration. This design therefore defines the target application structure while retaining the prerequisite gate for the UI Wizard, Postgres Queue, Orchestrator, Bootstrap Worker, and Free AI Pipeline. The UI is a separate project and deployment, not content hosted by the API.
+See proposal.md for motivation and specs/ for externally visible behavior. The repository currently has no application source, solution, database schema, queue, worker, or deployment configuration. This change includes the minimum UI, Postgres queue, Service orchestrator, Workers bootstrap consumer, and Gemini pipeline foundations in the five-project architecture. The UI is a separate project and deployment, not content hosted by the API.
 
 ## Goals / Non-Goals
 
@@ -47,6 +47,16 @@ Alternatives considered: controllers add a different endpoint model than request
 The Workers project registers consumers and dependencies, translates queue envelopes into Service use-case calls, and reports acknowledgement/retry outcomes. Payload validation and task behavior remain owned by Service so API-triggered and queue-triggered work share the same rules. Avoid feature logic in consumer classes.
 
 Alternatives considered: implementing task rules in workers would make behavior unavailable to API callers and produce divergent validation.
+
+### Build the prerequisite foundations inside the application
+
+Do not require separate unprovided proposal deployments before this change can run. The independent Ui project supplies the dashboard foundation; PostgreSQL supplies both durable application persistence and a transactional task queue/outbox; Service owns task orchestration, Gemini integration, and worker task contracts; Workers supplies the bootstrap background consumer that leases and executes eligible tasks through Service use cases. Keep these components inside the five projects and expose stable Service-owned contracts between them.
+
+Use PostgreSQL-backed queue rows with durable status, lease/visibility timeout, bounded retry, and idempotency to avoid requiring a sixth broker project or an unspecified external queue. Preserve the option to integrate an external broker later behind the Service-owned queue contract, but do not make that a prerequisite for this implementation.
+
+The term “UI Wizard” is treated here as the independently hosted React dashboard foundation, not as a separate project or an additional unspecified onboarding workflow. The dashboard's required chat and artifact review flows remain specified in `ai-chat`.
+
+Alternatives considered: blocking on absent prerequisite deployments would prevent this repository from progressing; introducing an external broker or wizard workflow without an existing contract would add undeclared infrastructure and behavior.
 
 ### Return typed results for expected outcomes and use domain events selectively
 
@@ -118,7 +128,7 @@ Alternatives considered: WebSockets add bidirectional connection complexity for 
 
 ## Risks / Trade-offs
 
-- [The listed foundation proposals are not present in this repository] → Gate integration on verifying the UI Wizard, Postgres/queue, orchestrator, bootstrap worker, and AI pipeline contracts; sequence missing prerequisites before enabling the bot.
+- [The repository has no existing foundation services or contracts] → Implement their minimum required forms within Ui, Service, Api, Workers, and PostgreSQL before feature-specific actions; test contracts through the running projects and Testcontainers.
 - [The separately deployed UI and API have cross-origin and rollout concerns] → Configure explicit trusted UI origins, secure authentication, CORS, and compatible API/UI versioning; verify staged rollout and rollback for each deployment independently.
 - [The five-project scope concentrates infrastructure adapters and migrations in the Service assembly] → Keep adapters and schema concerns in their feature slices with clear internal boundaries; test those boundaries in the single xUnit project.
 - [Finite tests cannot establish that production has zero defects, and unconfigured third-party sandboxes leave coverage gaps] → Trace all spec scenarios, run real Testcontainers and sandbox-backed acceptance checks, publish skipped/blocked scenarios, and gate release on required checks; retain staged smoke tests, observability, and rollback.
@@ -132,11 +142,11 @@ Alternatives considered: WebSockets add bidirectional connection complexity for 
 
 ## Migration Plan
 
-1. Verify or complete the UI Wizard, Postgres/queue, orchestrator, Bootstrap Worker, and Free AI Pipeline prerequisites and agree on their API/task contracts.
-2. Scaffold the .NET 10 Service, Api, Workers, and Test projects, plus the separate React/TypeScript Ui project; verify there are exactly five projects and that the UI has an independent build and deployment pipeline with no UI assets in Api.
-3. Provision PostgreSQL, repository-scoped GitHub App permissions, provider secret encryption, model configuration, and workflow/task allowlists.
-4. Create the Gherkin/xUnit acceptance contract for every spec scenario and architecture-test baseline before feature implementation. Develop Service use cases test-first using typed results and selective domain events, with PostgreSQL/queue integration against Testcontainers.
-5. Wire authenticated Minimal API routes and thin worker consumers, then independently deploy the UI and exercise browser behavior through Playwright in the same xUnit project. Run Gemini/GitHub scenarios against isolated real sandboxes; report blocked/not-run tests honestly.
+1. Inventory the missing prerequisite contracts and map the UI, queue, orchestration, bootstrap worker, and AI pipeline to the five project boundaries; treat UI Wizard as the dashboard foundation.
+2. Scaffold the .NET 10 Service, Api, Workers, and Test projects, plus the separate React/TypeScript Ui project; verify there are exactly five projects and the UI has an independent build/deployment pipeline.
+3. Create the Gherkin/xUnit acceptance contract for every spec scenario and architecture-test baseline before feature behavior. Configure Testcontainers for PostgreSQL and build the durable queue/outbox, Service orchestration contracts, and thin bootstrap worker before feature-specific actions.
+4. Implement Service use cases test-first with typed results and selective domain events. Build the Gemini pipeline, authenticated Minimal API routes, and independent dashboard; run PostgreSQL/queue behavior against Testcontainers and browser behavior through Playwright.
+5. Provision repository-scoped GitHub App permissions, provider secret encryption, model configuration, and workflow/task allowlists. Run Gemini/GitHub scenarios against isolated real sandboxes; report blocked/not-run tests honestly.
 6. Enable issue, review-branch/PR, workflow, OpenSpec, and worker actions only after authorization, preview confirmation, audit records, scenario tests, and architecture checks pass.
 7. Roll back by disabling the feature flag and action endpoints, draining or cancelling queued tasks where safe, and retaining completed action/audit records. Revoke installation/provider credentials if compromise is suspected; do not automatically revert already-created GitHub issues or pull requests.
 
