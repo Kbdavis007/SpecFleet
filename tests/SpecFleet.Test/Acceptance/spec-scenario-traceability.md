@@ -54,5 +54,10 @@ Status is reported per scenario; a scenario is only `passing` when its acceptanc
 | User declines an artifact action | passing | same |
 | ai-chat with the hosted Gemini provider (task 3.2 verification clause) | blocked | no `GEMINI_API_KEY` in this environment; reported blocked, not passing |
 | AI harness provider-generated case (task 3.3) | blocked | no `GEMINI_API_KEY`; harness structural/boundary/compilation checks pass |
-| All `github-repository-actions` scenarios | pending | section 4 not implemented |
+| GitHub authorization (both scenarios) | passing | `Features/GitHub/GitHubActionSteps.cs`; real `GitHubActionHandler` + real `HttpGitHubClient` over real HTTP |
+| GitHub issue creation (confirm, edit, cancel) | passing | same; confirmation bound to the reviewed preview digest |
+| GitHub file changes (apply, pull request, invalid path) | passing | same; `GitHubRepositoryPolicy` path rules |
+| GitHub workflow dispatch (allowed, unallowlisted) | passing | same; workflow allowlist enforced before dispatch |
+| GitHub mutation rejected by the API | passing | same; failure reported, never success-shaped |
+| GitHub actions against a live sandbox repository (tasks 4.1–4.3 verification clause) | blocked | no least-privilege GitHub App credential for an isolated sandbox repo; reported blocked, not passing |
 | All `openspec-worker-orchestration` scenarios | pending | section 5 not implemented |

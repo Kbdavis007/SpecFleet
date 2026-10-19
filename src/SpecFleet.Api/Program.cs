@@ -1,11 +1,13 @@
 using SpecFleet.Api.Features.Authentication;
 using SpecFleet.Api.Features.Chat;
 using SpecFleet.Api.Features.ExceptionHandling;
+using SpecFleet.Api.Features.GitHub;
 using SpecFleet.Api.Features.Health;
 using SpecFleet.Service.Features.Chat.Artifacts;
 using SpecFleet.Service.Features.Chat.Ask;
 using SpecFleet.Service.Features.Chat.Conversations;
 using SpecFleet.Service.Features.Chat.Providers;
+using SpecFleet.Service.Features.GitHubActions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +41,26 @@ builder.Services.AddSingleton<IChatCompletionProvider>(services =>
 
 builder.Services.AddHttpClient(nameof(GeminiChatCompletionProvider));
 
+var gitHubToken = builder.Configuration["GitHub:AccessToken"] ?? string.Empty;
+var allowedWorkflows = builder.Configuration
+    .GetSection("GitHub:AllowedWorkflows")
+    .Get<string[]>()
+    ?? [];
+
+builder.Services.AddHttpClient("github", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GitHub:BaseUrl"] ?? "https://api.github.com");
+});
+
+builder.Services.AddSingleton<IGitHubClient>(services => new HttpGitHubClient(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient("github"),
+    gitHubToken));
+
+builder.Services.AddSingleton(new GitHubRepositoryPolicy(allowedWorkflows));
+builder.Services.AddScoped(services => new GitHubActionHandler(
+    services.GetRequiredService<IGitHubClient>(),
+    services.GetRequiredService<GitHubRepositoryPolicy>()));
+
 builder.Services.AddScoped(services => new ChatAskHandler(
     services.GetRequiredService<PostgreSqlConversationStore>(),
     services.GetRequiredService<IChatCompletionProvider>(),
@@ -59,6 +81,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapChatEndpoints();
+app.MapGitHubActionEndpoints();
 app.MapHealthEndpoints();
 
 app.Run();

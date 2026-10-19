@@ -33,7 +33,10 @@ public sealed class ApiProcessHarness : IAsyncDisposable
         string connectionString,
         string? geminiApiKey = null,
         string? geminiModel = null,
-        string? geminiBaseUrl = null)
+        string? geminiBaseUrl = null,
+        string? gitHubBaseUrl = null,
+        string? gitHubAccessToken = null,
+        IEnumerable<string>? gitHubAllowedWorkflows = null)
     {
         var projectDirectory = LocateApiProjectDirectory();
         var assemblyPath = await BuildApiAsync(projectDirectory);
@@ -65,6 +68,25 @@ public sealed class ApiProcessHarness : IAsyncDisposable
         if (geminiBaseUrl is not null)
         {
             startInfo.Environment["Gemini__BaseUrl"] = geminiBaseUrl;
+        }
+
+        if (gitHubBaseUrl is not null)
+        {
+            startInfo.Environment["GitHub__BaseUrl"] = gitHubBaseUrl;
+        }
+
+        if (gitHubAccessToken is not null)
+        {
+            startInfo.Environment["GitHub__AccessToken"] = gitHubAccessToken;
+        }
+
+        if (gitHubAllowedWorkflows is not null)
+        {
+            var index = 0;
+            foreach (var workflow in gitHubAllowedWorkflows)
+            {
+                startInfo.Environment[$"GitHub__AllowedWorkflows__{index++}"] = workflow;
+            }
         }
 
         var process = Process.Start(startInfo)
