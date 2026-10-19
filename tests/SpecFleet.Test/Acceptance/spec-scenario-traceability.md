@@ -35,3 +35,24 @@ These Gherkin scenarios are behavior contracts derived from the OpenSpec capabil
 | `openspec-worker-orchestration` / The assistant supports the configured SpecFleet worker task types | User requests an unconfigured worker category | `Features/OpenSpecWorkerOrchestration.feature` / User requests an unconfigured worker category | `@spec_orchestration_unsupported_category` |
 | `openspec-worker-orchestration` / Orchestration results are observable | An operation or task fails | `Features/OpenSpecWorkerOrchestration.feature` / An operation or task fails | `@spec_orchestration_results_failure` |
 | `openspec-worker-orchestration` / Orchestration results are observable | A task remains in progress | `Features/OpenSpecWorkerOrchestration.feature` / A task remains in progress | `@spec_orchestration_results_in_progress` |
+
+## Implementation status
+
+Status is reported per scenario; a scenario is only `passing` when its acceptance test executes and succeeds. `pending` scenarios have no step bindings yet. `blocked` scenarios have an implemented behavior but cannot be verified in this environment.
+
+| Scenario | Status | Evidence |
+|---|---|---|
+| Assistant response streams | passing | `Features/Chat/AiChatSteps.cs`; real `ChatAskHandler` + real PostgreSQL + real Gemini-protocol server |
+| Provider request fails | passing | same |
+| User cancels a response | passing | same |
+| User requests a supported artifact | passing | same; `ArtifactCatalog`/`ArtifactValidator` |
+| Generated content fails validation | passing | same |
+| User reviews generated code | passing | same |
+| Browser requests an AI response | passing | same; credential never leaves the server |
+| Provider credential is unavailable | passing | same; `UnconfiguredChatCompletionProvider` |
+| User confirms an artifact action | passing | same; `ArtifactActionHandler` + real action sink |
+| User declines an artifact action | passing | same |
+| ai-chat with the hosted Gemini provider (task 3.2 verification clause) | blocked | no `GEMINI_API_KEY` in this environment; reported blocked, not passing |
+| AI harness provider-generated case (task 3.3) | blocked | no `GEMINI_API_KEY`; harness structural/boundary/compilation checks pass |
+| All `github-repository-actions` scenarios | pending | section 4 not implemented |
+| All `openspec-worker-orchestration` scenarios | pending | section 5 not implemented |
