@@ -1,4 +1,6 @@
+using SpecFleet.Service.Features.TaskOrchestration;
 using SpecFleet.Service.Features.TaskQueue;
+using SpecFleet.Service.Features.WorkerTasks;
 using SpecFleet.Service.Shared.Results;
 using SpecFleet.Workers.Consumers;
 using Testcontainers.PostgreSql;
@@ -12,12 +14,15 @@ public sealed class BootstrapWorkerConsumerTests
     {
         await using var database = await CreateDatabaseAsync();
         var queue = await CreateQueueAsync(database);
+        var executor = new WorkerTaskExecutor(new WorkerTaskPayloadValidator());
+
+        const string payload = """{"name":"inventory-worker","language":"csharp"}""";
         var task = SuccessValue(await queue.EnqueueAsync(
             "generate-worker",
-            """{"taskType":"generate-worker","payload":{"description":"Generate a worker"},"shouldFail":false}""",
+            Envelope(payload, Digest(payload)),
             "worker-success"));
 
-        using var consumer = new BootstrapWorkerConsumer(queue, TimeSpan.FromMilliseconds(50));
+        using var consumer = new BootstrapWorkerConsumer(queue, executor, TimeSpan.FromMilliseconds(50));
         await consumer.StartAsync(CancellationToken.None);
         await WaitForStatusAsync(queue, task.Id, TaskQueueStatus.Succeeded, TimeSpan.FromSeconds(5));
         await consumer.StopAsync(CancellationToken.None);
@@ -30,19 +35,39 @@ public sealed class BootstrapWorkerConsumerTests
     {
         await using var database = await CreateDatabaseAsync();
         var queue = await CreateQueueAsync(database);
+        var executor = new WorkerTaskExecutor(new WorkerTaskPayloadValidator());
+
+        // The envelope's digest does not match its payload, so the Service executor rejects it
+        // on every attempt and the queue marks the task Failed once attempts are exhausted.
+        const string payload = """{"name":"inventory-worker","language":"csharp"}""";
         var task = SuccessValue(await queue.EnqueueAsync(
             "generate-worker",
-            """{"taskType":"generate-worker","payload":{"description":"Generate a worker"},"shouldFail":true}""",
+            Envelope(payload, "STALE-DIGEST"),
             "worker-failure",
             maximumAttempts: 2));
 
-        using var consumer = new BootstrapWorkerConsumer(queue, TimeSpan.FromMilliseconds(50));
+        using var consumer = new BootstrapWorkerConsumer(queue, executor, TimeSpan.FromMilliseconds(50));
         await consumer.StartAsync(CancellationToken.None);
         await WaitForStatusAsync(queue, task.Id, TaskQueueStatus.Failed, TimeSpan.FromSeconds(5));
         await consumer.StopAsync(CancellationToken.None);
 
         Assert.Equal(TaskQueueStatus.Failed, SuccessValue(await queue.GetStatusAsync(task.Id)));
     }
+
+    private static string Envelope(string payload, string digest) =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new WorkerTaskEnvelope(
+                nameof(WorkerTaskType.GenerateWorker),
+                payload,
+                "acceptance-user",
+                "approval-reference",
+                "inventory-worker",
+                digest),
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+    private static string Digest(string payload) =>
+        Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload)));
 
     private static async Task<PostgreSqlContainer> CreateDatabaseAsync()
     {

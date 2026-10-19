@@ -1,5 +1,5 @@
-using System.Text.Json;
 using SpecFleet.Service.Features.TaskQueue;
+using SpecFleet.Service.Features.WorkerTasks;
 using SpecFleet.Service.Shared.Results;
 
 namespace SpecFleet.Workers.Consumers;
@@ -7,14 +7,19 @@ namespace SpecFleet.Workers.Consumers;
 public sealed class BootstrapWorkerConsumer : IDisposable, IAsyncDisposable
 {
     private readonly PostgreSqlTaskQueue _queue;
+    private readonly WorkerTaskExecutor _executor;
     private readonly TimeSpan _pollInterval;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly string _workerId = $"bootstrap-worker-{Guid.NewGuid():N}";
     private Task? _processingLoop;
 
-    public BootstrapWorkerConsumer(PostgreSqlTaskQueue queue, TimeSpan? pollInterval = null)
+    public BootstrapWorkerConsumer(
+        PostgreSqlTaskQueue queue,
+        WorkerTaskExecutor executor,
+        TimeSpan? pollInterval = null)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
         if (_pollInterval <= TimeSpan.Zero)
         {
@@ -84,30 +89,22 @@ public sealed class BootstrapWorkerConsumer : IDisposable, IAsyncDisposable
 
     private async Task<WorkerDisposition?> ExecuteAsync(TaskQueueLease lease, CancellationToken cancellationToken)
     {
-        var parseResult = TryParseEnvelope(lease.Payload, out var envelope);
-        if (!parseResult)
+        // The consumer performs no task behavior of its own: it deserializes the durable
+        // envelope, delegates to the Service-owned executor, and maps the typed result to an
+        // acknowledgement, retry, or rejection.
+        var execution = _executor.Execute(lease.Payload);
+        if (execution is ServiceResult<WorkerTaskExecution>.Failure failure)
         {
-            await RetryAsync(lease, TimeSpan.FromSeconds(1), "The task payload could not be parsed.", cancellationToken);
-            return WorkerDisposition.Retry;
-        }
-
-        if (string.Equals(envelope.TaskType, "generate-worker", StringComparison.OrdinalIgnoreCase) && envelope.ShouldFail)
-        {
-            await RetryAsync(lease, TimeSpan.FromSeconds(1), "Simulated worker failure.", cancellationToken);
-            return WorkerDisposition.Retry;
+            var disposition = failure.Error.IsRetryable ? WorkerDisposition.Retry : WorkerDisposition.Reject;
+            await RetryAsync(lease, TimeSpan.FromSeconds(1), failure.Error.Message, cancellationToken);
+            return disposition;
         }
 
         var completion = await _queue.CompleteAsync(lease, cancellationToken);
-        if (completion is ServiceResult<bool>.Failure failure)
+        if (completion is ServiceResult<bool>.Failure completionFailure)
         {
-            if (failure.Error.IsRetryable)
-            {
-                await RetryAsync(lease, TimeSpan.FromSeconds(1), failure.Error.Message, cancellationToken);
-                return WorkerDisposition.Retry;
-            }
-
-            await RetryAsync(lease, TimeSpan.FromSeconds(1), failure.Error.Message, cancellationToken);
-            return WorkerDisposition.Reject;
+            await RetryAsync(lease, TimeSpan.FromSeconds(1), completionFailure.Error.Message, cancellationToken);
+            return completionFailure.Error.IsRetryable ? WorkerDisposition.Retry : WorkerDisposition.Reject;
         }
 
         return WorkerDisposition.Acknowledge;
@@ -137,39 +134,4 @@ public sealed class BootstrapWorkerConsumer : IDisposable, IAsyncDisposable
             // Graceful shutdown handled by outer loop.
         }
     }
-
-    private static bool TryParseEnvelope(string payload, out BootstrapTaskEnvelope envelope)
-    {
-        envelope = default!;
-
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            if (root.ValueKind is not JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            if (!root.TryGetProperty("taskType", out var taskTypeElement) ||
-                !root.TryGetProperty("payload", out var payloadElement) ||
-                taskTypeElement.ValueKind is not JsonValueKind.String)
-            {
-                return false;
-            }
-
-            envelope = new BootstrapTaskEnvelope(
-                taskTypeElement.GetString() ?? string.Empty,
-                payloadElement,
-                root.TryGetProperty("shouldFail", out var shouldFailElement) &&
-                shouldFailElement.ValueKind == JsonValueKind.True);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private sealed record BootstrapTaskEnvelope(string TaskType, JsonElement Payload, bool ShouldFail);
 }

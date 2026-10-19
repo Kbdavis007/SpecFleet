@@ -3,11 +3,16 @@ using SpecFleet.Api.Features.Chat;
 using SpecFleet.Api.Features.ExceptionHandling;
 using SpecFleet.Api.Features.GitHub;
 using SpecFleet.Api.Features.Health;
+using SpecFleet.Api.Features.OpenSpecOrchestration;
 using SpecFleet.Service.Features.Chat.Artifacts;
 using SpecFleet.Service.Features.Chat.Ask;
 using SpecFleet.Service.Features.Chat.Conversations;
 using SpecFleet.Service.Features.Chat.Providers;
 using SpecFleet.Service.Features.GitHubActions;
+using SpecFleet.Service.Features.OpenSpecOrchestration;
+using SpecFleet.Service.Features.TaskOrchestration;
+using SpecFleet.Service.Features.TaskQueue;
+using SpecFleet.Service.Features.WorkerTasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +66,24 @@ builder.Services.AddScoped(services => new GitHubActionHandler(
     services.GetRequiredService<IGitHubClient>(),
     services.GetRequiredService<GitHubRepositoryPolicy>()));
 
+var openSpecWorkspaceRoot = builder.Configuration["OpenSpec:WorkspaceRoot"]
+    ?? Directory.GetCurrentDirectory();
+builder.Services.AddSingleton(new OpenSpecWorkspaceGuard(openSpecWorkspaceRoot));
+builder.Services.AddSingleton<IOpenSpecCommandRunner>(new ProcessOpenSpecCommandRunner(
+    builder.Configuration["OpenSpec:Executable"] ?? "openspec"));
+builder.Services.AddScoped(services => new OpenSpecOperationHandler(
+    services.GetRequiredService<IOpenSpecCommandRunner>(),
+    services.GetRequiredService<OpenSpecWorkspaceGuard>()));
+
+builder.Services.AddSingleton(new PostgreSqlTaskQueue(connectionString));
+builder.Services.AddSingleton<WorkerTaskPayloadValidator>();
+builder.Services.AddScoped(services => new WorkerTaskOrchestrator(
+    services.GetRequiredService<PostgreSqlTaskQueue>()));
+builder.Services.AddScoped(services => new WorkerTaskHandler(
+    services.GetRequiredService<WorkerTaskOrchestrator>(),
+    services.GetRequiredService<WorkerTaskPayloadValidator>(),
+    services.GetRequiredService<PostgreSqlTaskQueue>()));
+
 builder.Services.AddScoped(services => new ChatAskHandler(
     services.GetRequiredService<PostgreSqlConversationStore>(),
     services.GetRequiredService<IChatCompletionProvider>(),
@@ -74,7 +97,14 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// Serialize enums as readable strings so API responses such as worker task status are stable
+// and self-describing for the UI.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
 var app = builder.Build();
+
+await app.Services.GetRequiredService<PostgreSqlTaskQueue>().InitializeAsync();
 
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseAuthentication();
@@ -82,6 +112,7 @@ app.UseAuthorization();
 
 app.MapChatEndpoints();
 app.MapGitHubActionEndpoints();
+app.MapOpenSpecOrchestrationEndpoints();
 app.MapHealthEndpoints();
 
 app.Run();

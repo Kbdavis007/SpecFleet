@@ -2,6 +2,7 @@ using Npgsql;
 using SpecFleet.Service.Features.Chat.Conversations;
 using SpecFleet.Service.Features.Chat.Secrets;
 using SpecFleet.Service.Features.Chat.Actions;
+using SpecFleet.Service.Features.TaskQueue;
 using SpecFleet.Service.Shared.Results;
 using Testcontainers.PostgreSql;
 
@@ -34,12 +35,14 @@ public static class SharedPostgreSql
             connectionString,
             new AesGcmSecretProtector(Convert.ToBase64String(new byte[32])));
         var actions = new PostgreSqlArtifactActionSink(connectionString);
+        var queue = new PostgreSqlTaskQueue(connectionString);
 
         RequireSuccess(await conversations.InitializeAsync(), "conversation");
         RequireSuccess(await credentials.InitializeAsync(), "credential");
         RequireSuccess(await actions.InitializeAsync(), "artifact action");
+        RequireSuccess(await queue.InitializeAsync(), "task queue");
 
-        return new State(connectionString, conversations, credentials, actions);
+        return new State(connectionString, conversations, credentials, actions, queue);
     }
 
     private static void RequireSuccess(ServiceResult<bool> result, string name)
@@ -54,14 +57,15 @@ public static class SharedPostgreSql
         string ConnectionString,
         PostgreSqlConversationStore Conversations,
         PostgreSqlProviderCredentialStore Credentials,
-        PostgreSqlArtifactActionSink Actions)
+        PostgreSqlArtifactActionSink Actions,
+        PostgreSqlTaskQueue Queue)
     {
         public async Task ResetAsync()
         {
             await using var connection = new NpgsqlConnection(ConnectionString);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand(
-                "TRUNCATE specfleet_chat_messages, specfleet_conversations, specfleet_provider_credentials, specfleet_artifact_actions;",
+                "TRUNCATE specfleet_chat_messages, specfleet_conversations, specfleet_provider_credentials, specfleet_artifact_actions, specfleet_tasks;",
                 connection);
             await command.ExecuteNonQueryAsync();
         }

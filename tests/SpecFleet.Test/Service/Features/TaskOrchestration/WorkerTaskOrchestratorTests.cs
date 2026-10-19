@@ -39,9 +39,10 @@ public sealed class WorkerTaskOrchestratorTests
             Assert.Equal("user-1", root.GetProperty("approvedBy").GetString());
             Assert.Equal($"approval-{taskType}", root.GetProperty("approvalReference").GetString());
             Assert.Equal(Target, root.GetProperty("target").GetString());
+            using var payload = JsonDocument.Parse(root.GetProperty("payload").GetString()!);
             Assert.Equal(
                 "Generate a worker",
-                root.GetProperty("payload").GetProperty("description").GetString());
+                payload.RootElement.GetProperty("description").GetString());
             Assert.IsType<ServiceResult<bool>.Success>(
                 await queue.CompleteAsync(lease.Lease));
         }

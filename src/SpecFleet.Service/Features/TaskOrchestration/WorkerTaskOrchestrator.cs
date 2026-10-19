@@ -39,7 +39,7 @@ public sealed class WorkerTaskOrchestrator(PostgreSqlTaskQueue queue)
                 new ServiceError(ServiceErrorCode.Conflict, "The task no longer matches the approved preview."));
         }
 
-        if (!TryParseObject(request.Payload, out var payload))
+        if (!TryParseObject(request.Payload, out _))
         {
             return ValidationFailure("The task payload must be a JSON object.");
         }
@@ -48,7 +48,7 @@ public sealed class WorkerTaskOrchestrator(PostgreSqlTaskQueue queue)
         var envelope = JsonSerializer.Serialize(
             new WorkerTaskEnvelope(
                 request.TaskType.ToString(),
-                payload,
+                request.Payload,
                 request.Approval.ActorId,
                 request.Approval.ApprovalReference,
                 request.Approval.Target,
@@ -129,12 +129,17 @@ public sealed class WorkerTaskOrchestrator(PostgreSqlTaskQueue queue)
     private static ServiceResult<WorkerTaskDispatch> ValidationFailure(string message) =>
         ServiceResult<WorkerTaskDispatch>.FromError(
             new ServiceError(ServiceErrorCode.Validation, message));
-
-    private sealed record WorkerTaskEnvelope(
-        string TaskType,
-        JsonElement Payload,
-        string ApprovedBy,
-        string ApprovalReference,
-        string Target,
-        string PayloadDigest);
 }
+
+/// <summary>
+/// The durable queue envelope for an approved worker task. The payload is carried as the exact
+/// approved JSON string so the approved digest still matches after JSONB round-tripping, which
+/// normalizes object key order. The consumer deserializes this to invoke the Service executor.
+/// </summary>
+public sealed record WorkerTaskEnvelope(
+    string TaskType,
+    string Payload,
+    string ApprovedBy,
+    string ApprovalReference,
+    string Target,
+    string PayloadDigest);

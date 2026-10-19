@@ -60,4 +60,8 @@ Status is reported per scenario; a scenario is only `passing` when its acceptanc
 | GitHub workflow dispatch (allowed, unallowlisted) | passing | same; workflow allowlist enforced before dispatch |
 | GitHub mutation rejected by the API | passing | same; failure reported, never success-shaped |
 | GitHub actions against a live sandbox repository (tasks 4.1–4.3 verification clause) | blocked | no least-privilege GitHub App credential for an isolated sandbox repo; reported blocked, not passing |
-| All `openspec-worker-orchestration` scenarios | pending | section 5 not implemented |
+| OpenSpec proposal, inspection, read-only/validation, state-changing preview, unsupported command (5 scenarios) | passing | `Features/OpenSpecOrchestration/OpenSpecWorkerOrchestrationSteps.cs`; real `OpenSpecWorkspaceReader`/`OpenSpecOperationHandler` and real OpenSpec CLI process |
+| Worker supported task, unsupported/invalid payload, supported categories, unconfigured category (4 scenarios) | passing | same; real `WorkerTaskPayloadValidator` |
+| Orchestration failure and in-progress observability (2 scenarios) | passing | same; real `WorkerTaskHandler` + `WorkerTaskOrchestrator` + Testcontainers PostgreSQL |
+| OpenSpec/worker orchestration over the running API (5 out-of-process tests) | passing | `Features/OpenSpecOrchestration/OpenSpecOrchestrationEndpointsTests.cs`; real running `SpecFleet.Api` process + real PostgreSQL |
+| Bootstrap consumer acknowledge/failure behavior (2 tests) | passing | `Workers/BootstrapWorkerConsumerTests.cs`; real consumer + Service `WorkerTaskExecutor` + Testcontainers PostgreSQL |
