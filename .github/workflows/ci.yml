@@ -62,4 +62,8 @@ jobs:
           node tests/SpecFleet.Test/bin/Debug/net10.0/.playwright/package/cli.js install --with-deps chromium
 
       - name: Run full acceptance suite
+        env:
+          # When this repository secret is present, the hosted-Gemini verification clause
+          # (task 3.2) runs against the real provider instead of reporting blocked.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: dotnet test SpecFleet.sln -nodeReuse:false --logger "console;verbosity=normal"

@@ -15,7 +15,12 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
   `tests/SpecFleet.Test/bin/Debug/net10.0` (the `playwright.ps1` script is PowerShell
   and cannot be run with `dotnet` on Linux).
 - npm registry is reachable; the UI project installs and builds locally.
-- No hosted Gemini credential (`GEMINI_API_KEY`) is present.
+- A `GEMINI_API_KEY` secret is registered for this workspace and for GitHub Actions. It is
+  not injected into this sandbox shell, so the real-credential clause cannot run here; it
+  runs in CI, where the workflow passes the secret through.
+- This sandbox can reach `generativelanguage.googleapis.com` (an unauthenticated request
+  returns 403 "unregistered callers", not a connection failure), so a credential is the
+  only missing piece.
 - No least-privilege GitHub App credential for an isolated sandbox repo is present.
 
 ## Section 5 (completed and pushed)
@@ -33,7 +38,7 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
 
 | Task | Blocked clause | Reason |
 |---|---|---|
-| 3.2 | real-credential verification | no `GEMINI_API_KEY`; adapter is verified against a real local Gemini-protocol HTTP server instead |
+| 3.2 | real-credential verification | `HostedGeminiVerificationTests` performs the real hosted call when `GEMINI_API_KEY` is set and reports blocked when it is not; the key reaches CI via `secrets.GEMINI_API_KEY`, but not this sandbox shell |
 | 3.3 | provider-generated harness case | same missing Gemini credential |
 | 4.1 | live GitHub sandbox side effects | no least-privilege GitHub App credential for an isolated sandbox repository |
 | 4.2 | live sandbox side effects | same |
@@ -66,6 +71,16 @@ passing. They are the only items left that need user help.
   tables. One class's reset could delete another class's in-flight rows, making the
   streaming tests fail intermittently. All classes that use `SharedPostgreSql` now join
   one non-parallel xUnit collection (`PostgreSqlCollection`).
+- The first fix attempt was wrong and did not hold. Putting only the plain xUnit classes in
+  their own non-parallel collection still left them running concurrently with Reqnroll's
+  generated `ReqnrollNonParallelizableFeatures` collection, because xUnit parallelizes
+  *across* separate collections. The suite passed once, then a later run failed with
+  "Browser requests an AI response" (credential row truncated) and "A task remains in
+  progress" (queued task row truncated).
+- Correct fix: `tests/SpecFleet.Test/AssemblyInfo.cs` disables parallelization for the whole
+  assembly, which covers both the Reqnroll features and the plain classes sharing the one
+  container. The per-class `PostgreSqlCollection` was removed as redundant. Lesson: for a
+  process-wide shared container, serialize the assembly, not per-class collections.
 
 ## Section 7
 
@@ -73,7 +88,7 @@ passing. They are the only items left that need user help.
   Testcontainers integration + Playwright + AI harness) and formatting checks.
 - `dotnet format SpecFleet.sln --verify-no-changes` is clean; the UI `npm run build`
   (tsc + vite) and `npm run lint` (oxlint) are clean.
-- Full suite: 108 passed, 0 failed, 0 skipped.
+- Full suite: 110 passed, 0 failed, 0 skipped (the two new hosted-Gemini cases included).
 - Blocked checks are surfaced explicitly; nothing is silently skipped.
 
 ## OpenSpec workflow reminders

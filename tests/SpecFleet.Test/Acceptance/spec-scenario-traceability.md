@@ -52,8 +52,8 @@ Status is reported per scenario; a scenario is only `passing` when its acceptanc
 | Provider credential is unavailable | passing | same; `UnconfiguredChatCompletionProvider` |
 | User confirms an artifact action | passing | same; `ArtifactActionHandler` + real action sink |
 | User declines an artifact action | passing | same |
-| ai-chat with the hosted Gemini provider (task 3.2 verification clause) | blocked | no `GEMINI_API_KEY` in this environment; reported blocked, not passing |
-| AI harness provider-generated case (task 3.3) | blocked | no `GEMINI_API_KEY`; harness structural/boundary/compilation checks pass |
+| ai-chat with the hosted Gemini provider (task 3.2 verification clause) | blocked-here / auto in CI | `HostedGeminiVerificationTests` performs the real hosted call when `GEMINI_API_KEY` is set and reports blocked when it is not; CI passes `secrets.GEMINI_API_KEY`. The credential is not injected into the local sandbox shell, so the local run reports blocked, not passing. |
+| AI harness provider-generated case (task 3.3) | blocked-here / auto in CI | same credential; the harness is credential-gated |
 | GitHub authorization (both scenarios) | passing | `Features/GitHub/GitHubActionSteps.cs`; real `GitHubActionHandler` + real `HttpGitHubClient` over real HTTP |
 | GitHub issue creation (confirm, edit, cancel) | passing | same; confirmation bound to the reviewed preview digest |
 | GitHub file changes (apply, pull request, invalid path) | passing | same; `GitHubRepositoryPolicy` path rules |
