@@ -10,7 +10,6 @@ namespace SpecFleet.Test.Features.GitHub;
 /// Verifies the GitHub Minimal API transport end to end against a genuinely running API
 /// process, the shared real PostgreSQL container, and a real local GitHub-protocol server.
 /// </summary>
-[Collection(PostgreSqlCollection.Name)]
 public sealed class GitHubActionEndpointsTests
 {
     private const string Title = "Reviewed title";

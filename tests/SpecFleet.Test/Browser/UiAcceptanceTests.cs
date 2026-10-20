@@ -10,7 +10,6 @@ namespace SpecFleet.Test.Browser;
 /// real PostgreSQL, and drives Chromium with Playwright. Nothing here mocks Service or
 /// persistence; the UI talks to the genuine API over HTTP and streaming.
 /// </summary>
-[Collection(PostgreSqlCollection.Name)]
 public sealed class UiAcceptanceTests : PageTest
 {
     private static string UiUrl(UiHostHarness ui, ApiProcessHarness api) =>

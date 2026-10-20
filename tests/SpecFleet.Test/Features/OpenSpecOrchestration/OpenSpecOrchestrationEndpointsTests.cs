@@ -12,7 +12,6 @@ namespace SpecFleet.Test.Features.OpenSpecOrchestration;
 /// genuinely running API process, the real OpenSpec CLI, and the shared real PostgreSQL
 /// container.
 /// </summary>
-[Collection(PostgreSqlCollection.Name)]
 public sealed class OpenSpecOrchestrationEndpointsTests
 {
     [Fact]
