@@ -60,9 +60,10 @@ public sealed class HostedGeminiVerificationTests
 
         var generated = await CollectAsync(
             provider,
-            "Write a minimal, self-contained C# class named Temperature in namespace GeneratedArtifact. "
-            + "It must have a double property Celsius and a method ToFahrenheit() returning double. "
-            + "Return only compilable C# source code with no markdown fences and no explanation.");
+            "Write a minimal, self-contained C# class named Temperature with a double property "
+            + "Celsius and a method ToFahrenheit() returning double. Do not declare a namespace, "
+            + "do not add using directives, and do not add a Main method; the caller supplies the "
+            + "namespace. Return only compilable C# source code with no markdown fences and no explanation.");
 
         var result = await new AiGeneratedCodeHarness()
             .RunAsync(ArtifactType.Code, ExtractCode(generated));
