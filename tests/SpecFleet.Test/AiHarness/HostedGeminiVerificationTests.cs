@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using SpecFleet.Service.Features.Chat.Artifacts;
@@ -30,7 +31,7 @@ public sealed class HostedGeminiVerificationTests
         }
 
         using var httpClient = new HttpClient();
-        var model = await ResolveModelAsync(httpClient, ApiKey);
+        var model = await ResolveStreamingModelAsync(httpClient, ApiKey);
         var provider = new GeminiChatCompletionProvider(httpClient, ApiKey, model);
 
         Assert.True(provider.IsConfigured);
@@ -54,7 +55,7 @@ public sealed class HostedGeminiVerificationTests
         }
 
         using var httpClient = new HttpClient();
-        var model = await ResolveModelAsync(httpClient, ApiKey);
+        var model = await ResolveStreamingModelAsync(httpClient, ApiKey);
         var provider = new GeminiChatCompletionProvider(httpClient, ApiKey, model);
 
         var generated = await CollectAsync(
@@ -102,10 +103,13 @@ public sealed class HostedGeminiVerificationTests
     }
 
     /// <summary>
-    /// Resolves the model from the live model list rather than a hardcoded name, so a retired
-    /// model does not silently break verification. <c>GEMINI_MODEL</c> overrides discovery.
+    /// Selects a model that the hosted API will actually stream from. The model list reports
+    /// <c>generateContent</c> support for models that still reject
+    /// <c>streamGenerateContent</c> with 404 (for example <c>gemini-2.5-flash</c>), so the
+    /// choice is confirmed with a real streaming probe rather than trusted from the list.
+    /// <c>GEMINI_MODEL</c> overrides discovery.
     /// </summary>
-    private static async Task<string> ResolveModelAsync(HttpClient httpClient, string apiKey)
+    private static async Task<string> ResolveStreamingModelAsync(HttpClient httpClient, string apiKey)
     {
         var configured = Environment.GetEnvironmentVariable("GEMINI_MODEL");
         if (!string.IsNullOrWhiteSpace(configured))
@@ -113,26 +117,55 @@ public sealed class HostedGeminiVerificationTests
             return configured;
         }
 
-        using var response = await httpClient.GetAsync($"{BaseUrl}/v1beta/models?key={apiKey}");
-        response.EnsureSuccessStatusCode();
+        using var listResponse = await httpClient.GetAsync($"{BaseUrl}/v1beta/models?key={apiKey}");
+        listResponse.EnsureSuccessStatusCode();
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
 
-        var usable = document.RootElement.GetProperty("models")
+        var candidates = document.RootElement.GetProperty("models")
             .EnumerateArray()
             .Where(model =>
                 model.TryGetProperty("supportedGenerationMethods", out var methods) &&
                 methods.EnumerateArray().Any(method => method.GetString() == "generateContent"))
             .Select(model => model.GetProperty("name").GetString() ?? string.Empty)
-            .Where(name => name.Contains("flash", StringComparison.OrdinalIgnoreCase))
+            .Where(name => name.Contains("flash", StringComparison.OrdinalIgnoreCase) &&
+                !name.Contains("tts", StringComparison.OrdinalIgnoreCase) &&
+                !name.Contains("image", StringComparison.OrdinalIgnoreCase))
             .Select(name => name.Replace("models/", string.Empty, StringComparison.Ordinal))
+            .OrderByDescending(name => name.Contains("latest", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         Assert.True(
-            usable.Count > 0,
+            candidates.Count > 0,
             "No Gemini model supporting generateContent was available for verification.");
 
-        return usable[0];
+        foreach (var candidate in candidates)
+        {
+            if (await CanStreamAsync(httpClient, apiKey, candidate))
+            {
+                return candidate;
+            }
+        }
+
+        Assert.Fail(
+            $"No advertised Gemini model streamed successfully. Tried: {string.Join(", ", candidates)}.");
+        throw new InvalidOperationException("Unreachable.");
+    }
+
+    private static async Task<bool> CanStreamAsync(HttpClient httpClient, string apiKey, string model)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{BaseUrl}/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}")
+        {
+            Content = JsonContent.Create(new
+            {
+                contents = new[] { new { parts = new[] { new { text = "ready" } } } }
+            })
+        };
+
+        using var response = await httpClient.SendAsync(request);
+        return response.IsSuccessStatusCode;
     }
 
     private static string ExtractCode(string generated)
