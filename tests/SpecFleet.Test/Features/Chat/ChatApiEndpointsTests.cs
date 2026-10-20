@@ -9,6 +9,7 @@ namespace SpecFleet.Test.Features.Chat;
 /// Verifies the chat Minimal API transport end to end against a genuinely running API process
 /// and the shared real PostgreSQL container: HTTP mappings, streaming, and authorization.
 /// </summary>
+[Collection(PostgreSqlCollection.Name)]
 public sealed class ChatApiEndpointsTests
 {
     [Fact]

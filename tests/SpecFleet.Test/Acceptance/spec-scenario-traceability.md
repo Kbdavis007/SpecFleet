@@ -65,3 +65,5 @@ Status is reported per scenario; a scenario is only `passing` when its acceptanc
 | Orchestration failure and in-progress observability (2 scenarios) | passing | same; real `WorkerTaskHandler` + `WorkerTaskOrchestrator` + Testcontainers PostgreSQL |
 | OpenSpec/worker orchestration over the running API (5 out-of-process tests) | passing | `Features/OpenSpecOrchestration/OpenSpecOrchestrationEndpointsTests.cs`; real running `SpecFleet.Api` process + real PostgreSQL |
 | Bootstrap consumer acknowledge/failure behavior (2 tests) | passing | `Workers/BootstrapWorkerConsumerTests.cs`; real consumer + Service `WorkerTaskExecutor` + Testcontainers PostgreSQL |
+| UI dashboard over the independently hosted build and running API (12 Playwright tests) | passing | `Browser/UiAcceptanceTests.cs` + `Support/UiHostHarness.cs`; real Chromium driving the real Vite build against the real running `SpecFleet.Api` process, real PostgreSQL, and a real Gemini-protocol server |
+| Api does not bundle or serve the UI project (1 architecture test) | passing | `Architecture/ArchitectureTests.cs`; asserts no UI project reference, no `wwwroot`, and no static-file middleware in Api |

@@ -97,6 +97,33 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
+    public void Api_does_not_bundle_or_serve_the_ui_project()
+    {
+        var root = FindRepositoryRoot();
+        var apiProjectFile = Path.Combine(root, "src", "SpecFleet.Api", "SpecFleet.Api.csproj");
+        var projectXml = File.ReadAllText(apiProjectFile);
+
+        // The API must not reference the UI project, copy its build output, or serve its assets.
+        Assert.DoesNotContain("SpecFleet.Ui", projectXml, StringComparison.Ordinal);
+        Assert.DoesNotContain("wwwroot", projectXml, StringComparison.OrdinalIgnoreCase);
+
+        var apiRoot = Path.Combine(root, "src", "SpecFleet.Api");
+        Assert.False(
+            Directory.Exists(Path.Combine(apiRoot, "wwwroot")),
+            "The API must not contain a wwwroot folder for UI assets.");
+
+        var apiSources = Directory
+            .EnumerateFiles(apiRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !HasBuildOutputSegment(apiRoot, path));
+        foreach (var source in apiSources)
+        {
+            var text = File.ReadAllText(source);
+            Assert.DoesNotContain("UseStaticFiles", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("MapStaticAssets", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void Architecture_rule_rejects_a_global_repository_layer()
     {
         var root = Directory.CreateTempSubdirectory("SpecFleet.Architecture.");

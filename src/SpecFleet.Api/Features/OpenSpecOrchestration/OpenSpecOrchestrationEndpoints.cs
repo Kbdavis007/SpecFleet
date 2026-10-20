@@ -57,6 +57,27 @@ public static class OpenSpecOrchestrationEndpoints
             });
 
         group.MapPost(
+            "/worker-tasks/preview",
+            (
+                WorkerTaskPreviewRequestBody request,
+                WorkerTaskPayloadValidator validator) =>
+            {
+                if (!Enum.TryParse<Service.Features.TaskOrchestration.WorkerTaskType>(
+                        request.TaskType,
+                        ignoreCase: true,
+                        out var taskType))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: nameof(ServiceErrorCode.Validation),
+                        detail: "A supported worker task type is required.");
+                }
+
+                var result = validator.Preview(taskType, request.Payload ?? string.Empty);
+                return ServiceResultHttpMapper.ToHttpResult(result);
+            });
+
+        group.MapPost(
             "/worker-tasks",
             async (
                 HttpContext context,
@@ -121,6 +142,8 @@ public sealed record OpenSpecOperationRequestBody(
     string? WorkspacePath,
     string? Target,
     bool Confirmed);
+
+public sealed record WorkerTaskPreviewRequestBody(string TaskType, string? Payload);
 
 public sealed record WorkerTaskDispatchRequestBody(
     string TaskType,

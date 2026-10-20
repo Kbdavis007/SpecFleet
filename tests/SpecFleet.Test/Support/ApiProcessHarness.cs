@@ -37,7 +37,8 @@ public sealed class ApiProcessHarness : IAsyncDisposable
         string? gitHubBaseUrl = null,
         string? gitHubAccessToken = null,
         IEnumerable<string>? gitHubAllowedWorkflows = null,
-        string? openSpecWorkspaceRoot = null)
+        string? openSpecWorkspaceRoot = null,
+        string? uiOrigin = null)
     {
         var projectDirectory = LocateApiProjectDirectory();
         var assemblyPath = await BuildApiAsync(projectDirectory);
@@ -93,6 +94,11 @@ public sealed class ApiProcessHarness : IAsyncDisposable
         if (openSpecWorkspaceRoot is not null)
         {
             startInfo.Environment["OpenSpec__WorkspaceRoot"] = openSpecWorkspaceRoot;
+        }
+
+        if (uiOrigin is not null)
+        {
+            startInfo.Environment["SpecFleet__Ui__AllowedOrigins__0"] = uiOrigin;
         }
 
         var process = Process.Start(startInfo)

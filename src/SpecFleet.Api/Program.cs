@@ -4,6 +4,7 @@ using SpecFleet.Api.Features.ExceptionHandling;
 using SpecFleet.Api.Features.GitHub;
 using SpecFleet.Api.Features.Health;
 using SpecFleet.Api.Features.OpenSpecOrchestration;
+using SpecFleet.Service.Features.Chat.Actions;
 using SpecFleet.Service.Features.Chat.Artifacts;
 using SpecFleet.Service.Features.Chat.Ask;
 using SpecFleet.Service.Features.Chat.Conversations;
@@ -27,6 +28,9 @@ var configuredTokens = builder.Configuration
 
 builder.Services.AddSingleton(new PostgreSqlConversationStore(connectionString));
 builder.Services.AddSingleton<ArtifactValidator>();
+builder.Services.AddSingleton(new PostgreSqlArtifactActionSink(connectionString));
+builder.Services.AddScoped(services => new ArtifactActionHandler(
+    services.GetRequiredService<PostgreSqlArtifactActionSink>()));
 
 builder.Services.AddSingleton<IChatCompletionProvider>(services =>
 {
@@ -97,6 +101,25 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// The UI is deployed independently from this API, so cross-origin calls are expected.
+// Only origins listed in SpecFleet:Ui:AllowedOrigins are trusted.
+var uiOrigins = builder.Configuration
+    .GetSection("SpecFleet:Ui:AllowedOrigins")
+    .Get<string[]>()
+    ?? [];
+
+builder.Services.AddCors(options =>
+    options.AddPolicy(UiCorsPolicy, policy =>
+    {
+        if (uiOrigins.Length > 0)
+        {
+            policy
+                .WithOrigins(uiOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+    }));
+
 // Serialize enums as readable strings so API responses such as worker task status are stable
 // and self-describing for the UI.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -105,8 +128,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 var app = builder.Build();
 
 await app.Services.GetRequiredService<PostgreSqlTaskQueue>().InitializeAsync();
+await app.Services.GetRequiredService<PostgreSqlArtifactActionSink>().InitializeAsync();
 
 app.UseMiddleware<ApiExceptionMiddleware>();
+app.UseCors(UiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -117,4 +142,8 @@ app.MapHealthEndpoints();
 
 app.Run();
 
-public partial class Program;
+public partial class Program
+{
+    /// <summary>Name of the CORS policy applied to the independently hosted UI.</summary>
+    public const string UiCorsPolicy = "specfleet-ui";
+}

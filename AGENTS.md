@@ -36,7 +36,9 @@ Docker (dockerd) must be running for Testcontainers-backed tests.
 
 - Acceptance scenarios live in `tests/SpecFleet.Test/Acceptance/Features/*.feature`; step bindings go in `tests/SpecFleet.Test/Features/<Capability>/*Steps.cs`.
 - Use real infrastructure. `SharedPostgreSql` starts one real PostgreSQL container per test run; `GeminiProtocolServer` is a real local HTTP server that speaks the Gemini SSE protocol so the real adapter is exercised. Do not substitute fakes or mocks for Service or persistence.
-- `ApiProcessHarness` starts the real `SpecFleet.Api` process for HTTP/stream/authorization tests.
+- Every test class that touches `SharedPostgreSql` is annotated `[Collection(PostgreSqlCollection.Name)]`. The collection disables parallelization because the container is process-wide and each test truncates the shared tables; without it, a parallel reset deletes another test's in-flight rows and streaming tests fail intermittently.
+- `ApiProcessHarness` starts the real `SpecFleet.Api` process for HTTP/stream/authorization tests. Pass `uiOrigin:` to set `SpecFleet:Ui:AllowedOrigins__0` so the independently hosted UI can call the API cross-origin.
+- `UiHostHarness` builds the real Vite output (`npm run build`) and serves `src/SpecFleet.Ui/dist` from its own origin for Playwright. Install the browser once with `node .playwright/package/cli.js install chromium` from `tests/SpecFleet.Test/bin/Debug/net10.0` (the `playwright.ps1` script is PowerShell-only).
 - Gherkin scenarios without bindings fail as "No matching step definition" (pending). That is intentional until the owning section is implemented.
 - xUnit here is 2.9.3: dynamic skip (`Assert.Skip`) is xUnit v3-only and surfaces as a failure. Report credential-blocked cases explicitly in the traceability map rather than skipping dynamically.
 - Reqnroll 3.3.4 exposes `ScenarioContext.Pending()`; `ScenarioExecutionStatus` is read-only.

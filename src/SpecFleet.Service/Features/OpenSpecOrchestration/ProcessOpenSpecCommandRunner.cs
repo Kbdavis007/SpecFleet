@@ -26,19 +26,31 @@ public sealed class ProcessOpenSpecCommandRunner(string executable = "openspec")
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(startInfo);
-        if (process is null)
+        try
         {
-            return new OpenSpecCommandResult(-1, string.Empty, "The OpenSpec CLI could not be started.");
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return new OpenSpecCommandResult(-1, string.Empty, "The OpenSpec CLI could not be started.");
+            }
+
+            var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            return new OpenSpecCommandResult(
+                process.ExitCode,
+                await standardOutput,
+                await standardError);
         }
-
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        return new OpenSpecCommandResult(
-            process.ExitCode,
-            await standardOutput,
-            await standardError);
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // The CLI is not installed or is not executable. Report it as an unsuccessful
+            // operation rather than a transport failure so callers can surface the cause.
+            return new OpenSpecCommandResult(
+                -1,
+                string.Empty,
+                $"The OpenSpec CLI could not be executed: {exception.Message}");
+        }
     }
 }

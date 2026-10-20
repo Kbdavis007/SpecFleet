@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using SpecFleet.Api.Features.Shared;
+using SpecFleet.Service.Features.Chat.Actions;
 using SpecFleet.Service.Features.Chat.Artifacts;
 using SpecFleet.Service.Features.Chat.Ask;
 using SpecFleet.Service.Features.Chat.Conversations;
@@ -98,6 +99,49 @@ public static class ChatEndpoints
                 return Results.Ok(ToResponse(preview));
             });
 
+        group.MapPost(
+            "/artifacts/apply",
+            async (
+                HttpContext context,
+                ArtifactActionRequestBody request,
+                ArtifactActionHandler handler,
+                CancellationToken cancellationToken) =>
+            {
+                var owner = ResolveOwner(context);
+                if (string.IsNullOrWhiteSpace(owner))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status403Forbidden,
+                        title: nameof(ServiceErrorCode.Unauthorized),
+                        detail: "An authenticated user is required.");
+                }
+
+                if (!Enum.TryParse<ArtifactType>(request.ArtifactType, ignoreCase: true, out var artifactType) ||
+                    !Enum.TryParse<ArtifactActionDecision>(
+                        request.Decision,
+                        ignoreCase: true,
+                        out var decision))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: nameof(ServiceErrorCode.Validation),
+                        detail: "A supported artifact type and decision are required.");
+                }
+
+                var result = await handler.ApplyAsync(
+                    new ArtifactActionRequest(
+                        request.ArtifactId ?? string.Empty,
+                        owner,
+                        artifactType,
+                        request.Target ?? string.Empty,
+                        request.Content ?? string.Empty,
+                        request.PreviewDigest ?? string.Empty,
+                        decision),
+                    cancellationToken);
+
+                return ServiceResultHttpMapper.ToHttpResult(result);
+            });
+
         return endpoints;
     }
 
@@ -177,3 +221,11 @@ public static class ChatEndpoints
 public sealed record StartConversationRequest(string? Title);
 
 public sealed record ArtifactPreviewRequest(string ArtifactType, string? Content);
+
+public sealed record ArtifactActionRequestBody(
+    string? ArtifactId,
+    string ArtifactType,
+    string? Target,
+    string? Content,
+    string? PreviewDigest,
+    string Decision);

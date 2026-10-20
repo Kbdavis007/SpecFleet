@@ -1,0 +1,65 @@
+# Release gates for SpecFleet. Every gate reports failure explicitly; nothing is silently
+# skipped. Credential-dependent checks (hosted Gemini, live GitHub sandbox) are documented
+# as blocked in tests/SpecFleet.Test/Acceptance/spec-scenario-traceability.md rather than
+# being waived here.
+
+name: "CI"
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install OpenSpec CLI
+        run: npm install -g @fission-ai/openspec
+
+      - name: Validate OpenSpec change strictly
+        run: openspec validate add-ai-chatbot-github-integration --strict
+
+      - name: Build UI (tsc + vite)
+        working-directory: src/SpecFleet.Ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Lint UI (oxlint)
+        working-directory: src/SpecFleet.Ui
+        run: npm run lint
+
+      - name: Verify formatting
+        run: dotnet format SpecFleet.sln --verify-no-changes --no-restore
+
+      - name: Install Playwright browser
+        run: |
+          dotnet build tests/SpecFleet.Test/SpecFleet.Test.csproj -nodeReuse:false
+          node tests/SpecFleet.Test/bin/Debug/net10.0/.playwright/package/cli.js install --with-deps chromium
+
+      - name: Run full acceptance suite
+        run: dotnet test SpecFleet.sln -nodeReuse:false --logger "console;verbosity=normal"
