@@ -16,12 +16,20 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
   and cannot be run with `dotnet` on Linux).
 - npm registry is reachable; the UI project installs and builds locally.
 - A `GEMINI_API_KEY` secret is registered for this workspace and for GitHub Actions. It is
-  not injected into this sandbox shell, so the real-credential clause cannot run here; it
-  runs in CI, where the workflow passes the secret through.
+  not injected into this sandbox shell, so the real-credential clause runs in CI, where the
+  workflow passes the secret through. CI is green: 111/111.
+- The sandbox was reset mid-run and lost the .NET SDK, the ICU libraries, and Docker.
+  Reinstall with `dotnet-install.sh --channel 10.0`, and extract `libicu76` from the Debian
+  pool to `/tmp/icu-extract/usr/lib/x86_64-linux-gnu` exported as `LD_LIBRARY_PATH`. Docker
+  is not available after a reset, so Testcontainers tests can only be verified in CI.
 - This sandbox can reach `generativelanguage.googleapis.com` (an unauthenticated request
   returns 403 "unregistered callers", not a connection failure), so a credential is the
   only missing piece.
-- No least-privilege GitHub App credential for an isolated sandbox repo is present.
+- The GitHub credential cannot create repositories: `POST /user/repos` returns 403
+  "Resource not accessible by integration", and `GET /installation/repositories` also
+  returns 403, so it is not a GitHub App installation token. It can push and can create
+  issues, branches, files, pull requests, and workflow dispatches on the `SpecFleet` repo.
+  A disposable sandbox repo therefore has to be created by the user, not by the agent.
 
 ## Section 5 (completed and pushed)
 
@@ -38,9 +46,9 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
 
 | Task | Blocked clause | Reason |
 |---|---|---|
-| 3.2 | real-credential verification | `HostedGeminiVerificationTests` performs the real hosted call when `GEMINI_API_KEY` is set and reports blocked when it is not; the key reaches CI via `secrets.GEMINI_API_KEY`, but not this sandbox shell |
-| 3.3 | provider-generated harness case | same missing Gemini credential |
-| 4.1 | live GitHub sandbox side effects | no least-privilege GitHub App credential for an isolated sandbox repository |
+| 3.2 | (resolved) | verified in CI against the real hosted provider |
+| 3.3 | (resolved) | real provider-generated C# passes the harness checks in CI |
+| 4.1 | live GitHub sandbox side effects | no disposable sandbox repository, and the credential cannot create one (no Administration permission) |
 | 4.2 | live sandbox side effects | same |
 | 4.3 | live sandbox release verification | same |
 
@@ -88,7 +96,7 @@ passing. They are the only items left that need user help.
   Testcontainers integration + Playwright + AI harness) and formatting checks.
 - `dotnet format SpecFleet.sln --verify-no-changes` is clean; the UI `npm run build`
   (tsc + vite) and `npm run lint` (oxlint) are clean.
-- Full suite: 110 passed, 0 failed, 0 skipped (the two new hosted-Gemini cases included).
+- Full suite in CI: 111 passed, 0 failed, 0 skipped, including the hosted-Gemini verification.
 - Blocked checks are surfaced explicitly; nothing is silently skipped.
 
 ## OpenSpec workflow reminders
