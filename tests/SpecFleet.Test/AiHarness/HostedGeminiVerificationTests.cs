@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using SpecFleet.Service.Features.Chat.Artifacts;
 using SpecFleet.Service.Features.Chat.Providers;
+using SpecFleet.Test.Support;
 
 namespace SpecFleet.Test.AiHarness;
 
@@ -19,20 +20,14 @@ public sealed class HostedGeminiVerificationTests
 
     private static string? ApiKey => Environment.GetEnvironmentVariable("GEMINI_API_KEY");
 
-    [Fact]
+    [RequiresConfigurationFact("the hosted Gemini real-credential clause needs a provider key", "GEMINI_API_KEY")]
     public async Task Hosted_gemini_provider_streams_a_completion_with_real_credentials()
     {
-        if (string.IsNullOrWhiteSpace(ApiKey))
-        {
-            Assert.True(
-                string.IsNullOrWhiteSpace(ApiKey),
-                "Expected no hosted Gemini credential; the real-credential clause is BLOCKED.");
-            return;
-        }
 
         using var httpClient = new HttpClient();
-        var model = await ResolveStreamingModelAsync(httpClient, ApiKey);
-        var provider = new GeminiChatCompletionProvider(httpClient, ApiKey, model);
+        var apiKey = ApiKey!;
+        var model = await ResolveStreamingModelAsync(httpClient, apiKey);
+        var provider = new GeminiChatCompletionProvider(httpClient, apiKey, model);
 
         Assert.True(provider.IsConfigured);
 
@@ -43,20 +38,14 @@ public sealed class HostedGeminiVerificationTests
             "The hosted Gemini provider returned no content.");
     }
 
-    [Fact]
+    [RequiresConfigurationFact("the provider-generated harness case needs a provider key", "GEMINI_API_KEY")]
     public async Task Hosted_gemini_generated_code_passes_the_ai_harness_checks()
     {
-        if (string.IsNullOrWhiteSpace(ApiKey))
-        {
-            Assert.True(
-                string.IsNullOrWhiteSpace(ApiKey),
-                "Expected no hosted Gemini credential; the provider-generated harness case is BLOCKED.");
-            return;
-        }
 
         using var httpClient = new HttpClient();
-        var model = await ResolveStreamingModelAsync(httpClient, ApiKey);
-        var provider = new GeminiChatCompletionProvider(httpClient, ApiKey, model);
+        var apiKey = ApiKey!;
+        var model = await ResolveStreamingModelAsync(httpClient, apiKey);
+        var provider = new GeminiChatCompletionProvider(httpClient, apiKey, model);
 
         var generated = await CollectAsync(
             provider,

@@ -28,8 +28,12 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
 - The GitHub credential cannot create repositories: `POST /user/repos` returns 403
   "Resource not accessible by integration", and `GET /installation/repositories` also
   returns 403, so it is not a GitHub App installation token. It can push and can create
-  issues, branches, files, pull requests, and workflow dispatches on the `SpecFleet` repo.
-  A disposable sandbox repo therefore has to be created by the user, not by the agent.
+  issues, branches, files, pull requests, and workflow dispatches on the `SpecFleet` repo,
+  and it has admin on the user's own repos, so an existing disposable repo (e.g.
+  `kbdavis07/testing-1`) satisfies the live-sandbox clause. The credential is not a
+  least-privilege GitHub App installation token, so that specific form of the clause stays
+  unverified. `POST /user/repos` returning 403 means a *new* sandbox repo cannot be created
+  by the agent, but it can be reused when the user already has one.
 
 ## Section 5 (completed and pushed)
 
@@ -48,12 +52,36 @@ change or `AGENTS.md`; it is a scratchpad that records environment limits.
 |---|---|---|
 | 3.2 | (resolved) | verified in CI against the real hosted provider |
 | 3.3 | (resolved) | real provider-generated C# passes the harness checks in CI |
-| 4.1 | live GitHub sandbox side effects | no disposable sandbox repository, and the credential cannot create one (no Administration permission) |
-| 4.2 | live sandbox side effects | same |
-| 4.3 | live sandbox release verification | same |
+| 4.1 | live GitHub sandbox side effects | (resolved) verified live against `kbdavis07/testing-1` |
+| 4.2 | live sandbox side effects | (resolved) same |
+| 4.3 | live sandbox release verification | (resolved) same |
+| 4.1-4.3 | least-privilege GitHub App credential form | the available credential is a repo-scoped token, not an App installation |
 
-These are reported as `blocked` in `spec-scenario-traceability.md`, never relabelled as
-passing. They are the only items left that need user help.
+Live sandbox side effects are verified by `Features/GitHub/LiveGitHubSandboxTests.cs`, which
+runs only when `SPECFLEET_SANDBOX_OWNER`, `SPECFLEET_SANDBOX_REPO`, and
+`SPECFLEET_SANDBOX_TOKEN` are set, and reports `skipped` otherwise. Run it locally with:
+
+```bash
+export SPECFLEET_SANDBOX_OWNER=kbdavis07 SPECFLEET_SANDBOX_REPO=testing-1
+export SPECFLEET_SANDBOX_TOKEN="$GITHUB_TOKEN"
+dotnet test tests/SpecFleet.Test/SpecFleet.Test.csproj \
+  --filter "FullyQualifiedName~LiveGitHubSandboxTests"
+```
+
+Only the least-privilege GitHub App form of the clause remains `blocked` in
+`spec-scenario-traceability.md`, never relabelled as passing.
+
+## Live-GitHub defect found in section 4
+
+Running the real client against the live API (not the local protocol stub) exposed a bug the
+stub could not catch: `EnsureReviewBranchAsync` passed the base *branch name* as the `sha`
+for `POST /git/refs`, and real GitHub rejects that with a 422. The old code treated *any*
+422 as "branch already exists" and continued, so every file write targeted a review branch
+that was never created. Fixed by resolving the base branch to a commit SHA
+(`GET /git/ref/{branch}`) and only tolerating a 422 whose body reports an existing
+reference. `GitHubProtocolServer` now validates the SHA like GitHub does, and
+`Features/GitHub/HttpGitHubClientTests.cs` pins both the happy path and the genuine-422
+failure.
 
 ## Section 6 (UI)
 

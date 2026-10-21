@@ -40,10 +40,16 @@ public sealed class GitHubProtocolServer : IAsyncDisposable
 
     /// <summary>
     /// A server that grants or denies write permission and reports successful mutations.
-    /// Denied requests return 403 so the client surfaces an authorization failure.
+    /// Denied requests return 403 so the client surfaces an authorization failure. The
+    /// reference endpoints validate the request the way GitHub does: the base branch is
+    /// resolved to a commit SHA and <c>POST /git/refs</c> rejects anything that is not a
+    /// 40-character commit, so a client that sends a branch name is caught here.
     /// </summary>
-    public static GitHubProtocolServer Authorizing(bool canWrite) =>
-        Start(async context =>
+    public static GitHubProtocolServer Authorizing(bool canWrite)
+    {
+        var createdRefs = new HashSet<string>(StringComparer.Ordinal);
+
+        return Start(async context =>
         {
             if (!canWrite)
             {
@@ -51,18 +57,28 @@ public sealed class GitHubProtocolServer : IAsyncDisposable
                 return;
             }
 
-            await HandleSuccessAsync(context);
+            await HandleSuccessAsync(context, createdRefs);
         });
+    }
 
     /// <summary>
-    /// A server that grants write permission but rejects the mutation, exercising the
-    /// "GitHub rejects a mutation" path.
+    /// A server that grants write permission but rejects every mutation with 422, exercising
+    /// the "GitHub rejects a mutation" path where the failure must surface rather than be
+    /// reported as a success-shaped outcome.
     /// </summary>
     public static GitHubProtocolServer RejectingMutation() =>
         Start(async context =>
         {
+            var path = context.Request.Url?.AbsolutePath ?? string.Empty;
+
             if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase))
             {
+                if (path.Contains("/git/ref/", StringComparison.Ordinal))
+                {
+                    await WriteJsonAsync(context, 200, new { @object = new { sha = ValidSha } });
+                    return;
+                }
+
                 await WriteJsonAsync(context, 200, new { permissions = new { push = true } });
                 return;
             }
@@ -70,12 +86,51 @@ public sealed class GitHubProtocolServer : IAsyncDisposable
             await WriteJsonAsync(context, 422, new { message = "Validation failed." });
         });
 
-    private static async Task HandleSuccessAsync(HttpListenerContext context)
+    /// <summary>
+    /// A server that grants write permission but rejects review-branch creation with the
+    /// invalid-request 422 GitHub returns for a malformed SHA, exercising the path where a
+    /// genuine 422 must surface as a failure rather than being tolerated as "already exists".
+    /// </summary>
+    public static GitHubProtocolServer RejectingReviewBranch() =>
+        Start(async context =>
+        {
+            var path = context.Request.Url?.AbsolutePath ?? string.Empty;
+
+            if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase))
+            {
+                if (path.Contains("/git/ref/", StringComparison.Ordinal))
+                {
+                    await WriteJsonAsync(context, 200, new { @object = new { sha = ValidSha } });
+                    return;
+                }
+
+                await WriteJsonAsync(context, 200, new { permissions = new { push = true } });
+                return;
+            }
+
+            if (path.Contains("/git/refs", StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(context, 422, new { message = "Invalid request. At least 40 characters are required." });
+                return;
+            }
+
+            await WriteJsonAsync(context, 200, new { ok = true });
+        });
+
+    private const string ValidSha = "0123456789abcdef0123456789abcdef01234567";
+
+    private static async Task HandleSuccessAsync(HttpListenerContext context, HashSet<string> createdRefs)
     {
         var path = context.Request.Url?.AbsolutePath ?? string.Empty;
 
         if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase))
         {
+            if (path.Contains("/git/ref/", StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(context, 200, new { @object = new { sha = ValidSha } });
+                return;
+            }
+
             await WriteJsonAsync(context, 200, new { permissions = new { push = true } });
             return;
         }
@@ -108,20 +163,49 @@ public sealed class GitHubProtocolServer : IAsyncDisposable
             return;
         }
 
+        if (path.EndsWith("/git/refs", StringComparison.Ordinal))
+        {
+            var body = await ReadJsonAsync(context);
+            var reference = body.TryGetProperty("ref", out var refElement) ? refElement.GetString() : null;
+            var sha = body.TryGetProperty("sha", out var shaElement) ? shaElement.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(sha) || sha.Length is not (40 or 64) ||
+                !sha.All(Uri.IsHexDigit))
+            {
+                await WriteJsonAsync(context, 422, new
+                {
+                    message = "Invalid request. At least 40 characters are required; " +
+                        $"{sha?.Length ?? 0} were supplied."
+                });
+                return;
+            }
+
+            if (reference is not null && !createdRefs.Add(reference))
+            {
+                await WriteJsonAsync(context, 422, new { message = "Reference already exists" });
+                return;
+            }
+
+            await WriteJsonAsync(context, 201, new { @ref = reference });
+            return;
+        }
+
         if (path.Contains("/contents/", StringComparison.Ordinal))
         {
             await WriteJsonAsync(context, 201, new { content = new { sha = "abc123" } });
             return;
         }
 
-        if (path.Contains("/git/refs", StringComparison.Ordinal) ||
-            path.Contains("/git/ref/", StringComparison.Ordinal))
-        {
-            await WriteJsonAsync(context, 201, new { @ref = "refs/heads/review" });
-            return;
-        }
-
         await WriteJsonAsync(context, 200, new { ok = true });
+    }
+
+    private static async Task<JsonElement> ReadJsonAsync(HttpListenerContext context)
+    {
+        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+        var payload = await reader.ReadToEndAsync();
+        return string.IsNullOrWhiteSpace(payload)
+            ? default
+            : JsonDocument.Parse(payload).RootElement.Clone();
     }
 
     private static async Task WriteJsonAsync(HttpListenerContext context, int statusCode, object body)

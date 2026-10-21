@@ -66,4 +66,13 @@ jobs:
           # When this repository secret is present, the hosted-Gemini verification clause
           # (task 3.2) runs against the real provider instead of reporting blocked.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # When a disposable sandbox repository and its credential are configured, the
+          # live-GitHub verification clause (tasks 4.1-4.3) runs against the real API and
+          # produces real side effects instead of reporting blocked. Leave the repository
+          # secrets unset to keep the clause reported as skipped. Never point these at the
+          # SpecFleet repository itself.
+          SPECFLEET_SANDBOX_OWNER: ${{ secrets.SPECFLEET_SANDBOX_OWNER }}
+          SPECFLEET_SANDBOX_REPO: ${{ secrets.SPECFLEET_SANDBOX_REPO }}
+          SPECFLEET_SANDBOX_TOKEN: ${{ secrets.SPECFLEET_SANDBOX_TOKEN }}
+          SPECFLEET_SANDBOX_WORKFLOW: ${{ secrets.SPECFLEET_SANDBOX_WORKFLOW }}
         run: dotnet test SpecFleet.sln -nodeReuse:false --logger "console;verbosity=normal"

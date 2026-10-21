@@ -131,21 +131,61 @@ public sealed class HttpGitHubClient(HttpClient httpClient, string accessToken) 
         string baseBranch,
         CancellationToken cancellationToken)
     {
+        // The refs API requires a commit SHA, not a branch name. Passing the branch name
+        // fails with a 422 that the "already exists" tolerance below would otherwise swallow,
+        // which silently left every file write targeting a branch that was never created.
+        var baseSha = await ResolveCommitShaAsync(repository, baseBranch, cancellationToken);
+
         using var request = CreateRequest(
             HttpMethod.Post,
             $"repos/{repository.FullName}/git/refs",
-            new { @ref = $"refs/heads/{reviewBranch}", sha = baseBranch });
+            new { @ref = $"refs/heads/{reviewBranch}", sha = baseSha });
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
 
         // 422 means the review branch already exists, which is acceptable for an idempotent apply.
-        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity &&
+            await IsReferenceAlreadyExistsAsync(response, cancellationToken))
         {
             return;
         }
 
         await EnsureSuccessAsync(response, "create the review branch", cancellationToken);
     }
+
+    private async Task<string> ResolveCommitShaAsync(
+        GitHubRepositoryRef repository,
+        string baseBranch,
+        CancellationToken cancellationToken)
+    {
+        if (IsCommitSha(baseBranch))
+        {
+            return baseBranch;
+        }
+
+        using var request = CreateRequest(
+            HttpMethod.Get,
+            $"repos/{repository.FullName}/git/ref/heads/{baseBranch}");
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, $"resolve the base branch '{baseBranch}'", cancellationToken);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        return document.RootElement.GetProperty("object").GetProperty("sha").GetString()
+            ?? throw new GitHubApiException(
+                $"GitHub did not return a commit for the base branch '{baseBranch}'.", 500);
+    }
+
+    private static async Task<bool> IsReferenceAlreadyExistsAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return body.Contains("already exists", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCommitSha(string value) =>
+        value.Length is 40 or 64 && value.All(character => Uri.IsHexDigit(character));
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string relativePath, object? body = null)
     {

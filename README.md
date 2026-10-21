@@ -135,9 +135,14 @@ because the container is process-wide and each test truncates the shared tables.
 
 - Start Docker before running any Testcontainers-backed test.
 - Set `GEMINI_API_KEY` to verify the hosted Gemini provider. Without it, the adapter is verified
-  against `GeminiProtocolServer` and hosted verification is reported blocked.
-- Provide a least-privilege GitHub App credential for an isolated sandbox repository to verify
-  live GitHub side effects. Without it, live-sandbox verification is reported blocked.
+  against `GeminiProtocolServer` and hosted verification is reported as skipped, never passing.
+- Set `SPECFLEET_SANDBOX_OWNER`, `SPECFLEET_SANDBOX_REPO`, and `SPECFLEET_SANDBOX_TOKEN` to a
+  disposable repository to verify live GitHub side effects; optionally set
+  `SPECFLEET_SANDBOX_WORKFLOW` to an allowlisted workflow for dispatch. Without them,
+  live-sandbox verification is reported as skipped, never passing. Never point these at the
+  SpecFleet repository itself; the tests refuse that configuration. A least-privilege GitHub
+  App installation is the intended production credential, but a repository-scoped token with
+  write access verifies the same code paths.
 - Set `OpenSpec:WorkspaceRoot` to the directory that OpenSpec operations may touch. The
   `OpenSpecWorkspaceGuard` enforces containment within it and an allowlist of operations.
 
