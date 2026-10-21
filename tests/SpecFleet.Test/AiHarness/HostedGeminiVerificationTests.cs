@@ -92,16 +92,41 @@ public sealed class HostedGeminiVerificationTests
 
     private static async Task<string> CollectAsync(IChatCompletionProvider provider, string prompt)
     {
-        var text = new StringBuilder();
-        await foreach (var chunk in provider.StreamAsync(
-            new ChatCompletionRequest(prompt, null),
-            CancellationToken.None))
-        {
-            text.Append(chunk.Text);
-        }
+        // The hosted provider is a third-party service; 429 and 5xx are transient capacity
+        // responses, not adapter defects. Retry those a bounded number of times so a busy
+        // upstream does not fail the verification clause. A 4xx such as 404 is a real defect
+        // and is never retried, so a retired model cannot be masked.
+        const int maxAttempts = 3;
+        var delay = TimeSpan.FromSeconds(2);
 
-        return text.ToString();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var text = new StringBuilder();
+                await foreach (var chunk in provider.StreamAsync(
+                    new ChatCompletionRequest(prompt, null),
+                    CancellationToken.None))
+                {
+                    text.Append(chunk.Text);
+                }
+
+                return text.ToString();
+            }
+            catch (ProviderUnavailableException exception)
+                when (attempt < maxAttempts && IsTransient(exception.Message))
+            {
+                await Task.Delay(delay);
+                delay *= 2;
+            }
+        }
     }
+
+    private static bool IsTransient(string message) =>
+        TransientStatusCodes.Any(code => message.Contains(code, StringComparison.Ordinal));
+
+    private static readonly string[] TransientStatusCodes =
+        ["returned 429", "returned 500", "returned 502", "returned 503", "returned 504"];
 
     /// <summary>
     /// Selects a model that the hosted API will actually stream from. The model list reports
