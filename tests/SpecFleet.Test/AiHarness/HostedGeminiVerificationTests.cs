@@ -82,11 +82,13 @@ public sealed class HostedGeminiVerificationTests
     private static async Task<string> CollectAsync(IChatCompletionProvider provider, string prompt)
     {
         // The hosted provider is a third-party service; 429 and 5xx are transient capacity
-        // responses, not adapter defects. Retry those a bounded number of times so a busy
-        // upstream does not fail the verification clause. A 4xx such as 404 is a real defect
-        // and is never retried, so a retired model cannot be masked.
-        const int maxAttempts = 3;
-        var delay = TimeSpan.FromSeconds(2);
+        // responses, not adapter defects. Retry those with an exponential backoff long enough
+        // to ride out a per-minute quota window, so a busy upstream does not fail the
+        // verification clause. A 4xx such as 404 is a real defect and is never retried, so a
+        // retired model cannot be masked. If the provider still refuses after the full budget,
+        // the clause fails red rather than being reported as passing.
+        const int maxAttempts = 5;
+        var delay = TimeSpan.FromSeconds(3);
 
         for (var attempt = 1; ; attempt++)
         {
@@ -106,7 +108,7 @@ public sealed class HostedGeminiVerificationTests
                 when (attempt < maxAttempts && IsTransient(exception.Message))
             {
                 await Task.Delay(delay);
-                delay *= 2;
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
             }
         }
     }
