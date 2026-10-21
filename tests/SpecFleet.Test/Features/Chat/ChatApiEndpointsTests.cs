@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Npgsql;
 using SpecFleet.Test.Support;
 
 namespace SpecFleet.Test.Features.Chat;
@@ -96,5 +97,39 @@ public sealed class ChatApiEndpointsTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.False(document.RootElement.GetProperty("isValid").GetBoolean());
         Assert.NotEmpty(document.RootElement.GetProperty("validationFailures").EnumerateArray());
+    }
+
+    /// <summary>
+    /// A freshly deployed API must create its own schema. The shared container pre-creates every
+    /// table for the test suite, which previously hid the fact that the API host never
+    /// initialized the conversation store: a real deployment answered every conversation call
+    /// with a 503 until the schema was created out of band. This starts the API against a
+    /// database with no schema at all.
+    /// </summary>
+    [Fact]
+    public async Task Running_api_creates_its_own_conversation_schema_on_a_fresh_database()
+    {
+        var state = await SharedPostgreSql.InstanceAsync();
+
+        var builder = new NpgsqlConnectionStringBuilder(state.ConnectionString)
+        {
+            Database = $"specfleet_fresh_{Guid.NewGuid():N}"
+        };
+        var freshConnectionString = builder.ConnectionString;
+
+        await using (var admin = new NpgsqlConnection(state.ConnectionString))
+        {
+            await admin.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{builder.Database}\";", admin);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        await using var api = await ApiProcessHarness.StartAsync(freshConnectionString);
+
+        using var response = await api.Client.PostAsJsonAsync(
+            "/api/chat/conversations",
+            new { title = "Fresh deployment" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 }

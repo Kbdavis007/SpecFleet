@@ -127,6 +127,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
+await app.Services.GetRequiredService<PostgreSqlConversationStore>().InitializeAsync();
 await app.Services.GetRequiredService<PostgreSqlTaskQueue>().InitializeAsync();
 await app.Services.GetRequiredService<PostgreSqlArtifactActionSink>().InitializeAsync();
 
